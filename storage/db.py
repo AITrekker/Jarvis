@@ -1,11 +1,11 @@
 import os
 import json
 from datetime import datetime, timedelta
-from config import TRANSCRIPT_DIR, SUMMARY_INTERVAL_MIN
+from config import TRANSCRIPT_DIR, TRANSCRIPT_AGGREGATION_MIN  # Updated variable name
 
 def save_transcript(transcript_text, timestamp, directory=None, quiet=False):
     """
-    Save transcript text to JSON files, aggregated by intervals defined in config.SUMMARY_INTERVAL_MIN.
+    Save transcript text to JSON files, aggregated by intervals defined in config.TRANSCRIPT_AGGREGATION_MIN.
     Each interval gets its own file, with multiple transcripts stored as entries.
     
     Args:
@@ -25,7 +25,7 @@ def save_transcript(transcript_text, timestamp, directory=None, quiet=False):
     
     # Round down to the nearest interval (as defined in config)
     minute = timestamp_obj.minute
-    interval = SUMMARY_INTERVAL_MIN
+    interval = TRANSCRIPT_AGGREGATION_MIN  # Updated variable name
     rounded_minute = (minute // interval) * interval
     
     # Generate a filename based on the interval (truncate seconds and microseconds)
@@ -71,6 +71,63 @@ def save_transcript(transcript_text, timestamp, directory=None, quiet=False):
     return filepath
 
 def load_recent_transcripts(since_time):
-    print(f"Loading transcripts since {since_time}")
-    # TODO: Implement loading from JSON files
-    return []
+    """
+    Load transcripts created since a specific time
+    
+    Args:
+        since_time (str): ISO format timestamp
+        
+    Returns:
+        list: List of transcript entries
+    """
+    try:
+        # Parse the input timestamp
+        since_datetime = datetime.fromisoformat(since_time)
+        
+        # List to store all matching transcripts
+        all_transcripts = []
+        
+        # Ensure directory exists
+        if not os.path.exists(TRANSCRIPT_DIR):
+            print(f"Transcript directory not found: {TRANSCRIPT_DIR}")
+            return all_transcripts
+            
+        # Get all JSON files in the transcript directory
+        files = [f for f in os.listdir(TRANSCRIPT_DIR) if f.endswith('.json')]
+        
+        for filename in files:
+            try:
+                # Parse the timestamp from the filename
+                # Format: transcript_YYYY-MM-DDTHH-MM-00.json
+                datetime_str = filename.replace('transcript_', '').replace('.json', '')
+                file_datetime = datetime.strptime(datetime_str, '%Y-%m-%dT%H-%M-00')
+                
+                # Only process files that might contain transcripts after since_time
+                # (The file's interval might start before since_time but contain later entries)
+                if file_datetime >= since_datetime - timedelta(minutes=TRANSCRIPT_AGGREGATION_MIN):
+                    filepath = os.path.join(TRANSCRIPT_DIR, filename)
+                    
+                    # Read the file
+                    with open(filepath, 'r') as f:
+                        data = json.load(f)
+                        
+                        # If the file has entries
+                        if 'entries' in data:
+                            # Filter entries by timestamp
+                            for entry in data['entries']:
+                                entry_datetime = datetime.fromisoformat(entry['timestamp'])
+                                if entry_datetime >= since_datetime:
+                                    all_transcripts.append(entry)
+            except Exception as e:
+                print(f"Error processing file {filename}: {e}")
+                continue
+        
+        # Sort transcripts by timestamp
+        all_transcripts.sort(key=lambda x: x['timestamp'])
+        
+        print(f"Loaded {len(all_transcripts)} transcripts since {since_time}")
+        return all_transcripts
+        
+    except Exception as e:
+        print(f"Error loading transcripts: {e}")
+        return []

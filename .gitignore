@@ -1,12 +1,10 @@
-# Python
+# Python cache files
 __pycache__/
 *.py[cod]
-*.class
+*$py.class
 *.so
 .Python
-venv/
 env/
-.env/
 build/
 develop-eggs/
 dist/
@@ -22,23 +20,24 @@ var/
 .installed.cfg
 *.egg
 
-# Project specific
-data/transcripts/
-data/summaries/
-*.wav
+# Virtual environment
+venv/
+ENV/
 
-# Testing
-.coverage
-htmlcov/
-.pytest_cache/
-
-# IDE and Editor files
+# IDE specific files
 .idea/
 .vscode/
 *.swp
 *.swo
-*~
 
-# OS specific
-.DS_Store
-Thumbs.db
+# Project specific
+data/transcripts/
+data/summaries/
+*.wav
+*.mp3
+*.log
+
+# Keep directory structure with .gitkeep
+!data/.gitkeep
+!data/transcripts/.gitkeep
+!data/summaries/.gitkeep

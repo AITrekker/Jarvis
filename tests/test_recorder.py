@@ -12,16 +12,21 @@ from config import WHISPER_MODEL, SAMPLERATE, CHANNELS
 
 class TestRecorder(unittest.TestCase):
     def setUp(self):
-        # Create a temporary WAV file with silence
-        self.temp_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        # Create a temporary file that will be automatically deleted
+        self.temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
         self.temp_filename = self.temp_file.name
+        self.temp_file.close()
         
         # Generate 5 seconds of silence
         silence = np.zeros((SAMPLERATE * 5, CHANNELS), dtype=np.float32)
         sf.write(self.temp_filename, silence, SAMPLERATE)
         
     def tearDown(self):
-        os.unlink(self.temp_filename)
+        try:
+            if os.path.exists(self.temp_filename):
+                os.unlink(self.temp_filename)
+        except Exception as e:
+            print(f"Warning: Could not delete {self.temp_filename}: {e}")
 
     def test_whisper_model_loaded(self):
         """Test that the Whisper model is properly loaded."""

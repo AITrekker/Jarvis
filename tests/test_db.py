@@ -10,25 +10,19 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from storage.db import save_transcript
-from config import SUMMARY_INTERVAL_MIN
+from config import TRANSCRIPT_AGGREGATION_MIN  # Updated variable name
 
 class TestDB(unittest.TestCase):
     def setUp(self):
         # Create a temporary directory for test data
         self.test_dir = tempfile.mkdtemp()
         
-        # Store original interval and override for testing
-        self.original_interval = SUMMARY_INTERVAL_MIN
-        import config
-        config.SUMMARY_INTERVAL_MIN = 15  # Ensure consistent test behavior
+        # Store original interval and override for testing if needed
+        self.original_interval = TRANSCRIPT_AGGREGATION_MIN
 
     def tearDown(self):
         # Clean up the temporary directory
         shutil.rmtree(self.test_dir)
-        
-        # Restore original interval
-        import config
-        config.SUMMARY_INTERVAL_MIN = self.original_interval
 
     def test_save_transcript_creates_file(self):
         """Test that save_transcript creates a file when none exists."""
@@ -43,10 +37,11 @@ class TestDB(unittest.TestCase):
         """Test that transcripts from the same interval are aggregated."""
         # Create a timestamp
         now = datetime.utcnow()
-        # Make sure timestamps are in the same 15-min interval
-        base_time = now.replace(minute=(now.minute // 15) * 15, second=0, microsecond=0)
-        timestamp1 = (base_time + timedelta(minutes=5)).isoformat()
-        timestamp2 = (base_time + timedelta(minutes=10)).isoformat()
+        # Make sure timestamps are in the same interval
+        interval = TRANSCRIPT_AGGREGATION_MIN
+        base_time = now.replace(minute=(now.minute // interval) * interval, second=0, microsecond=0)
+        timestamp1 = (base_time + timedelta(minutes=1)).isoformat()
+        timestamp2 = (base_time + timedelta(minutes=2)).isoformat()
         
         # Save two transcripts within the same interval
         save_transcript("First transcript", timestamp1, directory=self.test_dir, quiet=True)
@@ -54,7 +49,7 @@ class TestDB(unittest.TestCase):
         
         # There should still be only one file
         files = os.listdir(self.test_dir)
-        self.assertEqual(len(files), 1, f"Should still have only one file for the same {SUMMARY_INTERVAL_MIN}-minute interval")
+        self.assertEqual(len(files), 1, f"Should still have only one file for the same {TRANSCRIPT_AGGREGATION_MIN}-minute interval")
         
         # Check file content - should have two entries
         with open(os.path.join(self.test_dir, files[0]), 'r') as f:
@@ -66,23 +61,25 @@ class TestDB(unittest.TestCase):
         """Test that transcripts from different intervals go to different files."""
         # Create timestamps in different intervals
         now = datetime.utcnow()
-        base_time = now.replace(minute=(now.minute // 15) * 15, second=0, microsecond=0)
+        interval = TRANSCRIPT_AGGREGATION_MIN
+        base_time = now.replace(minute=(now.minute // interval) * interval, second=0, microsecond=0)
         timestamp1 = base_time.isoformat()
-        timestamp2 = (base_time + timedelta(minutes=15)).isoformat()  # Next interval
+        timestamp2 = (base_time + timedelta(minutes=interval)).isoformat()  # Next interval
         
         save_transcript("First interval", timestamp1, directory=self.test_dir, quiet=True)
         save_transcript("Second interval", timestamp2, directory=self.test_dir, quiet=True)
         
         # Should have two files
         files = os.listdir(self.test_dir)
-        self.assertEqual(len(files), 2, f"Should create two files for different {SUMMARY_INTERVAL_MIN}-minute intervals")
+        self.assertEqual(len(files), 2, f"Should create two files for different {TRANSCRIPT_AGGREGATION_MIN}-minute intervals")
 
     def test_save_transcript_appends_to_existing(self):
         """Test that save_transcript appends to existing file."""
         # Create a timestamp
         now = datetime.utcnow()
-        base_time = now.replace(minute=(now.minute // 15) * 15, second=0, microsecond=0)
-        timestamp = (base_time + timedelta(minutes=5)).isoformat()
+        interval = TRANSCRIPT_AGGREGATION_MIN
+        base_time = now.replace(minute=(now.minute // interval) * interval, second=0, microsecond=0)
+        timestamp = (base_time + timedelta(minutes=1)).isoformat()
         
         # Save first transcript
         save_transcript("First transcript", timestamp, directory=self.test_dir, quiet=True)
@@ -113,7 +110,8 @@ class TestDB(unittest.TestCase):
         """Test that save_transcript handles corrupt JSON files."""
         timestamp = datetime.utcnow().isoformat()
         timestamp_obj = datetime.fromisoformat(timestamp)
-        rounded_minute = (timestamp_obj.minute // 15) * 15
+        interval = TRANSCRIPT_AGGREGATION_MIN
+        rounded_minute = (timestamp_obj.minute // interval) * interval
         interval_timestamp = timestamp_obj.replace(minute=rounded_minute, second=0, microsecond=0)
         filename = f"transcript_{interval_timestamp.isoformat().replace(':', '-')}.json"
         filepath = os.path.join(self.test_dir, filename)

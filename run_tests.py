@@ -1,40 +1,50 @@
-import unittest
 import os
 import sys
-from unittest import TextTestRunner, TextTestResult
+import unittest
+import time
 
-# Add current directory to path
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-
-# Custom test result formatter for cleaner output
-class CleanTestResult(TextTestResult):
-    def getDescription(self, test):
-        return test.shortDescription() or str(test)
-
-if __name__ == "__main__":
-    # Print header
-    print("\n" + "="*70)
+def run_tests():
+    """Run all test cases from the tests directory."""
+    print("=" * 70)
     print("🧪 JARVIS TEST SUITE")
-    print("="*70)
+    print("=" * 70)
     
-    # Discover and run all tests
-    test_loader = unittest.TestLoader()
-    test_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'tests')
-    test_suite = test_loader.discover(test_dir)
+    # Find the tests directory
+    tests_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tests")
     
-    # Use custom formatter with higher verbosity
-    runner = TextTestRunner(verbosity=2, resultclass=CleanTestResult)
-    result = runner.run(test_suite)
+    # Create a test loader
+    loader = unittest.TestLoader()
     
-    # Print summary
-    print("\n" + "="*70)
-    print(f"SUMMARY: {result.testsRun} tests run")
-    if not result.wasSuccessful():
+    # Discover all tests in the tests directory
+    test_suite = loader.discover(tests_dir, pattern="test_*.py")
+    
+    # Run the tests
+    start_time = time.time()
+    result = unittest.TextTestRunner().run(test_suite)
+    end_time = time.time()
+    
+    # Print a summary
+    print("=" * 70)
+    print(f"SUMMARY: {result.testsRun} tests run in {end_time - start_time:.2f}s")
+    
+    # Print failures and errors
+    if result.failures:
         print(f"❌ FAILURES: {len(result.failures)}")
+    else:
+        print("❌ FAILURES: 0")
+        
+    if result.errors:
         print(f"❌ ERRORS:   {len(result.errors)}")
     else:
-        print("✅ All tests passed!")
-    print("="*70 + "\n")
+        print("❌ ERRORS:   0")
     
-    # Return non-zero exit code if there were failures
-    sys.exit(not result.wasSuccessful())
+    if not result.failures and not result.errors:
+        print("✅ All tests passed!")
+        
+    print("=" * 70)
+    
+    # Return appropriate exit code
+    return len(result.failures) + len(result.errors)
+
+if __name__ == "__main__":
+    sys.exit(run_tests())
