@@ -2,8 +2,9 @@ import os
 import json
 from datetime import datetime, timedelta
 from config import TRANSCRIPT_DIR, TRANSCRIPT_AGGREGATION_MIN  # Updated variable name
+from logger.logger import logger
 
-def save_transcript(transcript_text, timestamp, directory=None, quiet=False):
+def save_transcript(transcript_text, timestamp, directory=None, quiet=False, has_speakers=False):
     """
     Save transcript text to JSON files, aggregated by intervals defined in config.TRANSCRIPT_AGGREGATION_MIN.
     Each interval gets its own file, with multiple transcripts stored as entries.
@@ -13,6 +14,7 @@ def save_transcript(transcript_text, timestamp, directory=None, quiet=False):
         timestamp (str): ISO format timestamp
         directory (str, optional): Override directory for testing
         quiet (bool, optional): Suppress output for testing
+        has_speakers (bool, optional): Whether transcript has speaker labels
     """
     # Allow directory override for testing
     save_dir = directory if directory is not None else TRANSCRIPT_DIR
@@ -36,7 +38,8 @@ def save_transcript(transcript_text, timestamp, directory=None, quiet=False):
     # Create an entry with the exact timestamp and transcript
     new_entry = {
         "timestamp": timestamp,
-        "transcript": transcript_text
+        "transcript": transcript_text,
+        "has_speakers": has_speakers
     }
     
     # If file exists, append to it; otherwise create a new file

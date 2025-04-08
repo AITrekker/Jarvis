@@ -41,3 +41,6 @@ data/summaries/
 !data/.gitkeep
 !data/transcripts/.gitkeep
 !data/summaries/.gitkeep
+
+# macOS system files
+.DS_Store

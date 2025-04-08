@@ -12,13 +12,20 @@ import requests
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from summarizer.summarize import create_summary_prompt, save_summary, generate_with_ollama, summarize_recent_transcripts
-from config import SUMMARY_INTERVAL_MIN
+from config import (
+    SUMMARY_INTERVAL_MIN, SUMMARY_MAX_CHARS, 
+    SUMMARY_FILE_ROLLOVER_MIN 
+)
 
 class TestSummarizer(unittest.TestCase):
     
-    def setUp(self):
+    @patch('logging.getLogger')
+    def setUp(self, mock_logger):
         # Create a temporary directory for test data
         self.test_dir = tempfile.mkdtemp()
+        # Mock logger to prevent errors in tests
+        self.mock_logger = MagicMock()
+        mock_logger.return_value = self.mock_logger
         
     def tearDown(self):
         # Clean up the temporary directory
@@ -44,6 +51,55 @@ class TestSummarizer(unittest.TestCase):
         prompt = create_summary_prompt([])
         self.assertEqual(prompt, "No transcripts available to summarize.")
     
+    def test_create_summary_prompt_with_speakers(self):
+        """Test creating a prompt from transcript data with speaker segments."""
+        transcripts = [
+            {
+                "timestamp": "2025-04-05T04:22:00",
+                "transcript": "Speaker 1: Hello there. Speaker 2: Hi, how are you?",
+                "segments": [
+                    {"speaker": "Speaker 1", "text": "Hello there."},
+                    {"speaker": "Speaker 2", "text": "Hi, how are you?"}
+                ]
+            }
+        ]
+        
+        prompt = create_summary_prompt(transcripts)
+        
+        # Check that prompt contains speaker labels
+        self.assertIn("Speaker 1:", prompt)
+        self.assertIn("Hello there.", prompt)
+        self.assertIn("Speaker 2:", prompt)
+        self.assertIn("Hi, how are you?", prompt)
+        
+        # Check that the prompt mentions conversation (not just transcribed speech)
+        self.assertIn("conversation", prompt.lower())
+
+    @patch('summarizer.summarize.USE_SUMMARY_CHUNKING', True)
+    def test_create_summary_prompt_chunking(self):
+        """Test that long transcripts are properly split into chunks when chunking is enabled."""
+        long_text = " ".join(["word"] * 20000)  # Very long transcript
+        transcripts = [{"timestamp": "2025-04-05T04:22:00", "transcript": long_text}]
+        
+        prompt = create_summary_prompt(transcripts)
+        
+        # Check that the prompt includes all chunks (no data loss)
+        self.assertIn("[Transcript chunked due to length.]", prompt)
+        self.assertGreaterEqual(len(prompt), SUMMARY_MAX_CHARS)  # Ensure prompt is at least one chunk long
+        self.assertEqual(prompt.count("word"), 20000)  # Ensure all words are included
+
+    @patch('summarizer.summarize.USE_SUMMARY_CHUNKING', False)
+    def test_create_summary_prompt_no_chunking(self):
+        """Test that long transcripts are not chunked when chunking is disabled."""
+        long_text = " ".join(["word"] * 10000)  # Create a very long transcript
+        transcripts = [{"timestamp": "2025-04-05T04:22:00", "transcript": long_text}]
+        
+        prompt = create_summary_prompt(transcripts)
+        
+        # Check that the full text is included (not truncated)
+        self.assertGreaterEqual(len(prompt), len(long_text))
+        self.assertNotIn("[Transcript truncated", prompt)  # Verify no truncation message
+
     @patch('requests.post')
     def test_generate_with_ollama(self, mock_post):
         """Test the Ollama API call."""
@@ -64,10 +120,11 @@ class TestSummarizer(unittest.TestCase):
         # Check result
         self.assertEqual(result, "This is a summary.")
     
+    @patch('summarizer.summarize.logger')
     @patch('requests.post')
-    def test_generate_with_ollama_error(self, mock_post):
+    def test_generate_with_ollama_error(self, mock_post, mock_logger):
         """Test error handling in Ollama API call."""
-        # Mock error - change to a requests exception
+        # Mock error
         mock_post.side_effect = requests.exceptions.RequestException("API error")
         
         # Call function
@@ -76,8 +133,12 @@ class TestSummarizer(unittest.TestCase):
         # Check error handling
         self.assertIn("Error generating summary", result)
     
-    def test_save_summary(self):
+    @patch('summarizer.summarize.generate_embedding')
+    def test_save_summary(self, mock_generate_embedding):
         """Test saving a summary to a file."""
+        # Mock embedding function to return simple vector
+        mock_generate_embedding.return_value = [0.1, 0.2, 0.3]
+
         # Create test data
         summary_text = "This is a test summary."
         source_transcripts = [
@@ -87,20 +148,70 @@ class TestSummarizer(unittest.TestCase):
         
         # Override summary directory for testing
         with patch('summarizer.summarize.SUMMARY_DIR', self.test_dir):
-            # Save summary
+            # Mock datetime.utcnow to return a fixed time for consistent testing
+            with patch('summarizer.summarize.datetime') as mock_datetime:
+                # Set to 2025-04-05 10:30:00
+                mock_now = datetime(2025, 4, 5, 10, 30, 0)
+                mock_datetime.utcnow.return_value = mock_now
+                
+                # Save summary
+                filepath = save_summary(summary_text, source_transcripts)
+                
+                # Check that file exists
+                self.assertTrue(os.path.exists(filepath))
+                
+                # Verify the filename format (should be hourly)
+                expected_filename = f"summary_2025-04-05T10-00-00.json"
+                self.assertTrue(filepath.endswith(expected_filename))
+                
+                # Load and check file content
+                with open(filepath, 'r') as f:
+                    data = json.load(f)
+                    
+                    # Check structure (should have entries array)
+                    self.assertIn('entries', data)
+                    self.assertEqual(len(data['entries']), 1)
+                    
+                    # Check content of first entry
+                    entry = data['entries'][0]
+                    self.assertEqual(entry['summary'], summary_text)
+                    self.assertEqual(entry['source_count'], 2)
+                    self.assertEqual(entry['period_minutes'], SUMMARY_INTERVAL_MIN)
+    
+    def test_save_summary_rollover_interval(self):
+        """Test that summaries roll over correctly based on SUMMARY_FILE_ROLLOVER_MIN."""
+        summary_text = "Test summary."
+        source_transcripts = [{"timestamp": "2025-04-05T04:22:00", "transcript": "Test transcript."}]
+
+        with patch('summarizer.summarize.SUMMARY_DIR', self.test_dir):
+            with patch('summarizer.summarize.datetime') as mock_datetime:
+                # Create a mock datetime object
+                mock_now = datetime(2025, 4, 5, 10, 45, 0)
+                # Set it as the return value for utcnow()
+                mock_datetime.utcnow.return_value = mock_now
+
+                filepath = save_summary(summary_text, source_transcripts)
+
+                # With SUMMARY_FILE_ROLLOVER_MIN = 60, this should create a file for 10:00
+                expected_filename = f"summary_2025-04-05T10-00-00.json"
+                self.assertTrue(filepath.endswith(expected_filename))
+    
+    @patch('summarizer.summarize.generate_embedding')
+    def test_save_summary_with_embedding(self, mock_generate_embedding):
+        """Test saving summary with embedding."""
+        mock_generate_embedding.return_value = [0.1, 0.2, 0.3]  # Mock embedding
+
+        summary_text = "Test summary."
+        source_transcripts = [{"timestamp": "2025-04-05T04:22:00", "transcript": "Test transcript."}]
+
+        with patch('summarizer.summarize.SUMMARY_DIR', self.test_dir):
             filepath = save_summary(summary_text, source_transcripts)
-            
-            # Check that file exists
-            self.assertTrue(os.path.exists(filepath))
-            
-            # Load and check file content
+
             with open(filepath, 'r') as f:
                 data = json.load(f)
-                
-                self.assertEqual(data['summary'], summary_text)
-                self.assertEqual(data['source_count'], 2)
-                self.assertEqual(len(data['source_transcripts']), 2)
-                self.assertEqual(data['source_transcripts'][0], "This is the first transcript.")
+                entry = data['entries'][-1]
+                self.assertIn('embedding', entry)
+                self.assertEqual(entry['embedding'], [0.1, 0.2, 0.3])
     
     @patch('summarizer.summarize.load_recent_transcripts')
     @patch('summarizer.summarize.generate_with_ollama')
