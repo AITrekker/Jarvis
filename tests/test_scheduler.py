@@ -6,7 +6,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Import the scheduler module to inspect what schedule implementation it's using
-from scheduler.periodic_tasks import start_scheduler
+from utils.periodic_tasks import start_scheduler
 
 # Look for the schedule module import within your periodic_tasks module
 import inspect

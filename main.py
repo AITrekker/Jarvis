@@ -1,5 +1,5 @@
-from mic_stream.recorder import transcribe_from_mic
-from scheduler.periodic_tasks import start_scheduler, stop_scheduler
+from utils.recorder import transcribe_from_mic
+from utils.periodic_tasks import start_scheduler, stop_scheduler
 from setup.setup import check_dependencies
 import config  # Import config to ensure platform detection runs
 from setup.logger import logger  

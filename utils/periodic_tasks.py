@@ -2,7 +2,7 @@ import time
 import threading
 from datetime import datetime, timedelta
 from config import SUMMARY_INTERVAL_MIN
-from summarizer.summarize import summarize_recent_transcripts
+from utils.summarize import summarize_recent_transcripts
 from setup.logger import logger
 
 # Add this global variable at the top of periodic_tasks.py

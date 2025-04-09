@@ -10,7 +10,7 @@ from setup.logger import logger
 
 from config import SAMPLERATE, CHANNELS, CHUNK_DURATION, WHISPER_MODEL
 from storage.db import save_transcript
-from summarizer.summarize import summarize_recent_transcripts
+from utils.summarize import summarize_recent_transcripts
 
 def transcribe_from_mic():
     """

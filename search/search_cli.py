@@ -7,8 +7,8 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 # Fix the imports
-from summarizer.summarize import generate_embedding
-from search.chroma_store import search_summaries, initialize_chroma  # Add initialize_chroma
+from utils.summarize import generate_embedding
+from storage.chroma_store import search_summaries, initialize_chroma  # Add initialize_chroma
 from setup.logger import logger
 from search.search import search_transcripts
 
@@ -36,7 +36,7 @@ def search_by_text(query_text, top_k=5):
 
 def check_chroma_data():
     """Check if ChromaDB has any data and inform the user."""
-    from search.chroma_store import get_all_summaries
+    from storage.chroma_store import get_all_summaries
     
     try:
         summaries = get_all_summaries(limit=1)

@@ -1,5 +1,5 @@
-from summarizer.summarize import generate_embedding
-from search.chroma_store import search_summaries
+from utils.summarize import generate_embedding
+from storage.chroma_store import search_summaries
 from setup.logger import logger
 
 def search_transcripts(query, top_k=5):

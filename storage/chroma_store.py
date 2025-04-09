@@ -168,45 +168,28 @@ def add_multiple_embeddings(embeddings_data):
         ids=ids
     )
 
-def search_summaries(query_embedding: List[float], top_k: int = 5) -> List[Dict[str, Any]]:
-    """
-    Search for summaries similar to the query embedding.
-    
-    Args:
-        query_embedding: The vector embedding of the query.
-        top_k: Number of results to return.
-        
-    Returns:
-        List of dictionaries containing the search results.
-    """
-    # Initialize if needed
-    if summaries_collection is None:
-        success = initialize_chroma()
-        if not success or summaries_collection is None:
-            logger.error("ChromaDB collections not initialized")
-            return []
-    
+def search_summaries(query_embedding, top_k=5):
+    """Search the ChromaDB summaries collection for the most relevant results."""
     try:
+        # Query ChromaDB
         results = summaries_collection.query(
             query_embeddings=[query_embedding],
-            n_results=top_k  # Use named parameter here
+            n_results=top_k
         )
-        
-        # Format results for easier processing
+
+        # Format the results
         formatted_results = []
-        for i in range(len(results["ids"][0])):
-            formatted_result = {
-                "id": results["ids"][0][i],
+        for i in range(len(results["documents"][0])):  # <-- This assumes nested structure!
+            formatted_results.append({
+                "document": results["documents"][0][i],
                 "metadata": results["metadatas"][0][i],
-                "source_transcripts": json.loads(results["documents"][0][i]) if results["documents"][0][i] else [],
-                "distance": results["distances"][0][i] if "distances" in results else None
-            }
-            formatted_results.append(formatted_result)
+                "distance": results["distances"][0][i]
+            })
             
         return formatted_results
     except Exception as e:
-        logger.error(f"Error searching summaries in ChromaDB: {e}")
-        return []
+        logger.error(f"Error during search: {str(e)}")
+        raise RuntimeError(f"Error during search: {str(e)}")
 
 def get_all_summaries(limit: int = 100) -> List[Dict[str, Any]]:
     """

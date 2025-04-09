@@ -135,7 +135,7 @@ def summarize_recent_transcripts():
 def save_summary(summary_text, source_transcripts):
     """Save the summary to a file and add its embedding to the vector database."""
     # Import here to avoid circular imports
-    from search.chroma_store import add_summary_embedding
+    from storage.chroma_store import add_summary_embedding
 
     # Generate the embedding
     embedding = generate_embedding(summary_text)
