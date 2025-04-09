@@ -12,7 +12,7 @@ from config import (
     SUMMARY_MAX_CHARS, USE_SUMMARY_CHUNKING,
     SUMMARY_FILE_ROLLOVER_MIN 
 )
-from logger import logger
+from setup.logger import logger
 
 def generate_with_ollama(prompt, model=OLLAMA_MODEL):
     """
@@ -133,10 +133,19 @@ def summarize_recent_transcripts():
     return summary
 
 def save_summary(summary_text, source_transcripts):
-    """
-    Save the summary to a file. Appends to file for the current hour,
-    rolling over to a new file at the top of each hour.
-    """
+    """Save the summary to a file and add its embedding to the vector database."""
+    # Import here to avoid circular imports
+    from search.chroma_store import add_summary_embedding
+
+    # Generate the embedding
+    embedding = generate_embedding(summary_text)
+    
+    # Get the time for the current summary
+    current_time = datetime.now()
+    
+    # Generate the filename based on the current timestamp
+    timestamp_str = current_time.strftime("%Y-%m-%dT%H-%M-%S")
+    
     # Create the summary directory if it doesn't exist
     if not os.path.exists(SUMMARY_DIR):
         os.makedirs(SUMMARY_DIR)
@@ -187,6 +196,15 @@ def save_summary(summary_text, source_transcripts):
         json.dump(data, f, indent=4)
     
     print(f"Summary saved to: {filepath}")
+    
+    # Add to ChromaDB
+    add_summary_embedding(
+        embedding=embedding,
+        summary_text=summary_text,
+        source_transcripts=source_transcripts,
+        timestamp=current_time.isoformat()
+    )
+    
     return filepath
 
 def summarize_text(text):

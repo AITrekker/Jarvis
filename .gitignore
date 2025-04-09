@@ -33,6 +33,7 @@ ENV/
 # Project specific
 data/transcripts/
 data/summaries/
+data/chroma/
 *.wav
 *.mp3
 *.log

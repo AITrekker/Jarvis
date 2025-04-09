@@ -2,7 +2,7 @@ import os
 import json
 from datetime import datetime, timedelta
 from config import TRANSCRIPT_DIR, TRANSCRIPT_AGGREGATION_MIN  # Updated variable name
-from logger.logger import logger
+from setup.logger import logger
 
 def save_transcript(transcript_text, timestamp, directory=None, quiet=False, has_speakers=False):
     """

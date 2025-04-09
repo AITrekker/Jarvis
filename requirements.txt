@@ -5,3 +5,5 @@ openai-whisper
 torch
 transformers
 apscheduler
+chromadb
+pytest

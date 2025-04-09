@@ -6,7 +6,7 @@ import queue
 import sys
 import soundfile as sf
 from datetime import datetime
-from logger.logger import logger
+from setup.logger import logger
 
 from config import SAMPLERATE, CHANNELS, CHUNK_DURATION, WHISPER_MODEL
 from storage.db import save_transcript
