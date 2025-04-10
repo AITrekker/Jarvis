@@ -87,11 +87,11 @@ OLLAMA_EMBEDDINGS_URL = f"{OLLAMA_BASE_URL}/api/embeddings"
 ########################
 
 # UI defaults - move from Jarvis_UI_Pro.py
-UI_PAGE_TITLE = "Jarvis Assistant Pro"
+UI_PAGE_TITLE = "Jarvis Assistant"
 UI_PAGE_ICON = "🤖"
 UI_LAYOUT = "wide"
 UI_SIDEBAR_STATE = "expanded"
-UI_DEFAULT_MODELS = ["phi4", "llama3", "mistral", "codellama", "vicuna"]
+UI_DEFAULT_MODELS = ["phi4", "llama3", "mistral", "codellama"]
 UI_DEFAULT_MODEL = "phi4"
 
 ########################
