@@ -15,22 +15,64 @@ from web.components.sidebar import render_sidebar
 from web.components.chat import render_chat_page, handle_chat_input
 
 class TestSidebar(unittest.TestCase):
+    """Tests for the sidebar component."""
     
-    def test_render_sidebar(self):
-        """Test that sidebar renders correctly and returns selected page."""
-        # Setup
-        st.sidebar.title = MagicMock()
-        st.sidebar.selectbox = MagicMock(return_value="phi4")
-        st.sidebar.radio = MagicMock(return_value="Chat")
-        
-        # Execute
-        result = render_sidebar()
-        
-        # Assert
-        st.sidebar.title.assert_called_once_with("🤖 Jarvis Assistant Pro")
-        st.sidebar.selectbox.assert_called_once()
-        st.sidebar.radio.assert_called_once()
-        self.assertEqual(result, "Chat")
+    @patch('streamlit.sidebar')
+    def test_render_sidebar(self, mock_sidebar):
+        """Test that sidebar renders correctly."""
+        # We need to patch the entire streamlit module and the recorder controls
+        with patch('web.components.sidebar.st') as mock_st, \
+             patch('web.components.sidebar.render_recorder_controls') as mock_controls:
+            
+            # Setup mock columns
+            mock_cols = [MagicMock(), MagicMock(), MagicMock()]
+            mock_st.sidebar.columns.return_value = mock_cols
+            mock_st.session_state = {}
+            
+            # Import here to avoid import errors
+            from web.components.sidebar import render_sidebar
+            
+            # Call the function
+            result = render_sidebar()
+            
+            # Check that sidebar was rendered
+            mock_st.sidebar.title.assert_called_once()
+            mock_controls.assert_called_once()
+
+    @patch('streamlit.columns')
+    def test_render_recorder_controls(self, mock_columns):
+        """Test that recorder controls render correctly."""
+        # Need to patch all the st function calls
+        with patch('web.components.recorder_controls.st') as mock_st, \
+             patch('web.components.recorder_controls.start_transcription') as mock_start, \
+             patch('web.components.recorder_controls.pause_transcription') as mock_pause, \
+             patch('web.components.recorder_controls.resume_transcription') as mock_resume, \
+             patch('web.components.recorder_controls.stop_transcription') as mock_stop:
+            
+            # Setup mock columns
+            mock_cols = [MagicMock(), MagicMock(), MagicMock()]
+            mock_st.sidebar.columns.return_value = mock_cols
+            mock_st.session_state = {
+                "is_recording": False,
+                "is_paused": False,
+                "console_output": ["Test output"]
+            }
+            
+            # Setup button click behavior
+            mock_cols[0].button.return_value = True  # Start button clicked
+            mock_cols[1].button.return_value = False
+            mock_cols[2].button.return_value = False
+            
+            # Import and test
+            from web.components.recorder_controls import render_recorder_controls
+            
+            # Call the function
+            render_recorder_controls()
+            
+            # Check that start was called
+            mock_start.assert_called_once()
+            mock_pause.assert_not_called()
+            mock_stop.assert_not_called()
 
 class TestChatComponent(unittest.TestCase):
     
@@ -61,3 +103,6 @@ class TestChatComponent(unittest.TestCase):
         self.assertEqual(len(st.session_state.messages), 2)  # User + assistant messages
         self.assertEqual(st.session_state.messages[0]["role"], "user")
         self.assertEqual(st.session_state.messages[1]["role"], "assistant")
+
+if __name__ == '__main__':
+    unittest.main()

@@ -10,8 +10,9 @@ from web.web_utils.search_handler import search_conversations, highlight_keyword
 
 class TestSearchHandler(unittest.TestCase):
     
-    @patch('web.utils.search_handler.generate_embedding')
-    @patch('web.utils.search_handler.unified_search')
+    # Update these patch paths to use web.web_utils instead of web.utils
+    @patch('web.web_utils.search_handler.generate_embedding')
+    @patch('web.web_utils.search_handler.unified_search')
     def test_search_conversations(self, mock_unified_search, mock_gen_embedding):
         # Setup
         mock_gen_embedding.return_value = [0.1, 0.2, 0.3]
@@ -20,8 +21,8 @@ class TestSearchHandler(unittest.TestCase):
             "rag_response": "Test response"
         }
         
-        # Execute with mocked session state
-        with patch('web.utils.search_handler.st.session_state', 
+        # Update this path as well
+        with patch('web.web_utils.search_handler.st.session_state', 
                    MagicMock(ollama_model="test-model")):
             result = search_conversations("test query")
         

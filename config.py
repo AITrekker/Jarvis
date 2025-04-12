@@ -15,31 +15,40 @@ DATA_DIR = os.environ.get('JARVIS_DATA_DIR', os.path.join(PROJECT_ROOT, "data"))
 # Get current system
 SYSTEM = platform.system()
 
-# Ensure directories exist
-os.makedirs(DATA_DIR, exist_ok=True)
+########################
+# ENVIRONMENT VARIABLES
+########################
+
+# Streamlit telemetry settings
+ENV_VARS = {
+    "STREAMLIT_BROWSER_GATHER_USAGE_STATS": "false",
+    "STREAMLIT_TELEMETRY": "false",
+    "JARVIS_INITIALIZED": "false",  # Default to false, set to true in main.py
+}
+
+# Set environment variables when config is imported
+for key, value in ENV_VARS.items():
+    os.environ[key] = value
 
 ########################
 # FILE SYSTEM SETTINGS
 ########################
 
-# Transcript settings
+# Create required directories
 TRANSCRIPT_DIR = os.path.join(DATA_DIR, "transcripts")
-os.makedirs(TRANSCRIPT_DIR, exist_ok=True)
-
-# Summary settings
 SUMMARY_DIR = os.path.join(DATA_DIR, "summaries")
-os.makedirs(SUMMARY_DIR, exist_ok=True)
-
-# Logs
 LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
-os.makedirs(LOG_DIR, exist_ok=True)
+CHROMA_DIR = os.path.join(DATA_DIR, "chroma")
+
+# Create all directories at once
+for directory in [DATA_DIR, TRANSCRIPT_DIR, SUMMARY_DIR, LOG_DIR, CHROMA_DIR]:
+    os.makedirs(directory, exist_ok=True)
 
 ########################
 # DATABASE SETTINGS
 ########################
 
 # ChromaDB settings
-CHROMA_DIR = os.path.join(DATA_DIR, "chroma")
 CHROMA_DB_IMPL = "duckdb+parquet"
 
 ########################
@@ -65,9 +74,9 @@ PLATFORM_CONFIGS = {
 # Use platform config or fall back to Linux config if system not recognized
 config = PLATFORM_CONFIGS.get(SYSTEM, PLATFORM_CONFIGS["Linux"])
 
-# Whisper config
+# Whisper model settings
 MODEL_NAME = config["whisper_model"]
-WHISPER_MODEL = whisper.load_model(MODEL_NAME)
+WHISPER_MODEL = whisper.load_model(MODEL_NAME)  # Direct loading (no lazy loading)
 
 # Ollama settings
 OLLAMA_MODEL = config["ollama_model"]
@@ -141,22 +150,19 @@ AUDIO_FORMAT = "wav"
 # Logging configuration
 LOG_LEVEL = logging.INFO  # Can be DEBUG, INFO, WARNING, ERROR, CRITICAL
 
-# Initialize platform-specific logging
-def setup_logging():
-    logging.basicConfig(
-        level=LOG_LEVEL,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler(os.path.join(LOG_DIR, "jarvis.log"))
-        ]
-    )
-    return logging.getLogger(__name__)
+# Initialize logging
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(os.path.join(LOG_DIR, "jarvis.log"))
+    ]
+)
 
 # Create logger
-logger = setup_logging()
+logger = logging.getLogger(__name__)
 
 # Print initialization info
 logger.info(f"Running on {SYSTEM}")
-logger.info(f"Loading Whisper model: {MODEL_NAME}")
 logger.info(f"Using Ollama model: {OLLAMA_MODEL}")
