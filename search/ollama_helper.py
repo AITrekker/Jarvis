@@ -69,13 +69,18 @@ def rag_search(query, search_results, model=None):
     if model is None:
         model = OLLAMA_MODEL
     
-    # Create system prompt
-    system_prompt = "You are Jarvis, a helpful AI assistant..."
+    # Log the number of results for debugging
+    logger.debug(f"RAG search found {len(search_results)} results for query: {query}")
     
-    # Format user prompt with retrieved documents
+    # Create system prompt - keeping it simple but effective
+    system_prompt = """You are Jarvis, a helpful AI assistant with access to past conversation summaries.
+When responding to the user's query, use the provided documents to give accurate, relevant information.
+Reference specific information from the documents when appropriate."""
+    
+    # Format user prompt with retrieved documents - returning to the effective simple format
     user_prompt = f"Query: {query}\n\nRelevant conversation history:\n"
     
-    # Add relevant documents to the prompt
+    # Add relevant documents to the prompt - keeping the original effective format
     for i, result in enumerate(search_results, 1):
         timestamp = result["metadata"].get("timestamp", "Unknown date")
         summary = result["metadata"].get("summary", "No summary available")
@@ -84,6 +89,9 @@ def rag_search(query, search_results, model=None):
         user_prompt += f"\n--- Document {i} (Relevance: {relevance:.1f}%) ---\n"
         user_prompt += f"Date: {timestamp}\n"
         user_prompt += f"Summary: {summary}\n"
+    
+    # Add a final instruction to ensure good use of sources
+    user_prompt += "\nPlease provide a helpful response to the query using the relevant information above."
     
     # Call the LLM with the enhanced prompt
     response = query_ollama(system_prompt, user_prompt, model=model)

@@ -2,12 +2,22 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import datetime
+import time
 from datetime import timedelta
-from storage.chroma_store import get_all_summaries
+from storage.chroma_store import get_all_summaries, delete_summary_by_id
 
 def render_timeline():
     """Render the Conversation Timeline page."""
     st.header("📅 Conversation Timeline")
+    
+    # Initialize session state for delete confirmation
+    if 'delete_summary_id' not in st.session_state:
+        st.session_state.delete_summary_id = None
+    
+    # Handle deletion confirmation if needed
+    if st.session_state.delete_summary_id:
+        show_delete_confirmation()
+        return  # Early return to display only the confirmation dialog
     
     # Get all summaries
     summaries = get_all_summaries()
@@ -42,6 +52,28 @@ def render_timeline():
             view_mode = st.radio("View mode", ["Day", "Week", "Month"])
         
         render_filtered_conversations(summaries, selected_date, view_mode)
+
+def show_delete_confirmation():
+    """Show confirmation dialog for deleting a summary."""
+    st.warning("⚠️ Are you sure you want to delete this conversation? This action cannot be undone.")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Yes, Delete"):
+            try:
+                delete_summary_by_id(st.session_state.delete_summary_id)
+                st.session_state.delete_summary_id = None
+                st.success("Conversation deleted successfully!")
+                time.sleep(1)  # Give user a moment to see the success message
+                st.rerun()  # Use st.rerun() instead of st.experimental_rerun()
+            except Exception as e:
+                st.error(f"Error deleting conversation: {str(e)}")
+    
+    with col2:
+        if st.button("Cancel"):
+            st.session_state.delete_summary_id = None
+            st.rerun()  # Use st.rerun() instead of st.experimental_rerun()
 
 def render_calendar_heatmap(conversation_counts):
     """Render the calendar heatmap visualization."""
@@ -115,16 +147,56 @@ def render_filtered_conversations(summaries, selected_date, view_mode):
         # Sort by timestamp
         filtered_summaries.sort(key=lambda x: x["metadata"]["timestamp"], reverse=True)
         
-        for summary in filtered_summaries:
+        # Apply custom CSS for the timeline cards
+        st.markdown("""
+        <style>
+        .timeline-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background-color: #f9f9f9;
+            position: relative;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .card-date {
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        .card-content {
+            margin-bottom: 10px;
+        }
+        .card-footer {
+            font-size: 0.8em;
+            color: #666;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        for index, summary in enumerate(filtered_summaries):
+            summary_id = summary["id"]
             date = summary["metadata"]["timestamp"].split("T")[0]
             time = summary["metadata"]["timestamp"].split("T")[1][:5]
             summary_text = summary["metadata"]["summary"]
             source_count = summary["metadata"]["source_count"]
             
-            st.markdown(f"""
-            <div class="timeline-card">
-                <h4>{date} at {time}</h4>
-                <p>{summary_text}</p>
-                <small>Based on {source_count} transcript entries</small>
-            </div>
-            """, unsafe_allow_html=True)
+            with st.container():
+                col1, col2 = st.columns([9, 1])
+                
+                with col1:
+                    st.markdown(f"**{date} at {time}**")
+                
+                with col2:
+                    # Delete button
+                    if st.button("🗑️", key=f"delete_{summary_id}", help="Delete this conversation"):
+                        st.session_state.delete_summary_id = summary_id
+                        st.rerun()  # Use st.rerun() instead of st.experimental_rerun()
+                
+                st.markdown(summary_text)
+                st.caption(f"Based on {source_count} transcript entries")
+                st.divider()

@@ -9,7 +9,7 @@ import sys
 # Add parent directory to path to import project modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from storage.db import load_recent_transcripts, save_transcript
+from storage.db_bak import load_recent_transcripts, save_transcript
 from config import TRANSCRIPT_AGGREGATION_MIN
 
 class TestLoadTranscripts(unittest.TestCase):
@@ -44,9 +44,9 @@ class TestLoadTranscripts(unittest.TestCase):
         since_time = (now - timedelta(minutes=15)).isoformat()
         
         # Override TRANSCRIPT_DIR for testing
-        import storage.db
-        original_dir = storage.db.TRANSCRIPT_DIR
-        storage.db.TRANSCRIPT_DIR = self.test_dir
+        import storage.db_bak
+        original_dir = storage.db_bak.TRANSCRIPT_DIR
+        storage.db_bak.TRANSCRIPT_DIR = self.test_dir
         
         try:
             # Load recent transcripts
@@ -62,14 +62,14 @@ class TestLoadTranscripts(unittest.TestCase):
             self.assertIn("Test transcript", results[0]['transcript'])
         finally:
             # Restore original directory
-            storage.db.TRANSCRIPT_DIR = original_dir
+            storage.db_bak.TRANSCRIPT_DIR = original_dir
     
     def test_load_from_empty_directory(self):
         """Test loading from an empty directory."""
         # Override TRANSCRIPT_DIR for testing with empty dir
-        import storage.db
-        original_dir = storage.db.TRANSCRIPT_DIR
-        storage.db.TRANSCRIPT_DIR = self.test_dir  # Empty temp dir
+        import storage.db_bak
+        original_dir = storage.db_bak.TRANSCRIPT_DIR
+        storage.db_bak.TRANSCRIPT_DIR = self.test_dir  # Empty temp dir
         
         try:
             # Load recent transcripts
@@ -80,7 +80,7 @@ class TestLoadTranscripts(unittest.TestCase):
             self.assertEqual(len(results), 0)
         finally:
             # Restore original directory
-            storage.db.TRANSCRIPT_DIR = original_dir
+            storage.db_bak.TRANSCRIPT_DIR = original_dir
     
     def test_load_with_invalid_files(self):
         """Test loading with invalid JSON files."""
@@ -96,9 +96,9 @@ class TestLoadTranscripts(unittest.TestCase):
             f.write("This is not valid JSON")
         
         # Override TRANSCRIPT_DIR for testing
-        import storage.db
-        original_dir = storage.db.TRANSCRIPT_DIR
-        storage.db.TRANSCRIPT_DIR = self.test_dir
+        import storage.db_bak
+        original_dir = storage.db_bak.TRANSCRIPT_DIR
+        storage.db_bak.TRANSCRIPT_DIR = self.test_dir
         
         try:
             # Load recent transcripts
@@ -109,7 +109,7 @@ class TestLoadTranscripts(unittest.TestCase):
             self.assertEqual(len(results), 0)
         finally:
             # Restore original directory
-            storage.db.TRANSCRIPT_DIR = original_dir
+            storage.db_bak.TRANSCRIPT_DIR = original_dir
 
 if __name__ == '__main__':
     unittest.main()

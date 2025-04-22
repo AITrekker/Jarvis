@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import os
 import sys
 
-from storage.db import load_recent_transcripts
+from storage.file_store import load_recent_transcripts
 from config import (
     OLLAMA_URL, OLLAMA_MODEL, OLLAMA_EMBEDDING_MODEL,
     OLLAMA_EMBEDDINGS_URL, 

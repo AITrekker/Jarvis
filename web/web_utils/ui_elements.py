@@ -1,7 +1,8 @@
 import streamlit as st
 
 def load_css():
-    """Load custom CSS styling."""
+    """Load custom CSS for the app."""
+    # Add your original CSS here without the sticky tabs modifications
     st.markdown("""
     <style>
         .chat-message {
@@ -115,6 +116,16 @@ def load_css():
         /* Add some spacing between tabs and content */
         .stTabs [data-baseweb="tab-panel"] {
             padding-top: 16px;
+        }
+
+        /* Dark mode support */
+        .stTabs {
+            background-color: var(--background-color);
+        }
+        
+        /* Dark mode support for tabs */
+        [data-theme="dark"] .stTabs [data-baseweb="tab-list"] {
+            background-color: var(--background-color);
         }
     </style>
     """, unsafe_allow_html=True)

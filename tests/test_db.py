@@ -9,7 +9,7 @@ import sys
 # Add parent directory to path to import project modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from storage.db import save_transcript
+from storage.file_store import save_transcript
 from config import TRANSCRIPT_AGGREGATION_MIN  # Updated variable name
 
 class TestDB(unittest.TestCase):

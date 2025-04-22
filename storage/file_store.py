@@ -1,7 +1,7 @@
 import os
 import json
 from datetime import datetime, timedelta
-from config import TRANSCRIPT_DIR, TRANSCRIPT_AGGREGATION_MIN  # Updated variable name
+from config import TRANSCRIPT_DIR, TRANSCRIPT_AGGREGATION_MIN
 from setup.logger import logger
 
 def save_transcript(transcript_text, timestamp, directory=None, quiet=False, has_speakers=False):
@@ -27,7 +27,7 @@ def save_transcript(transcript_text, timestamp, directory=None, quiet=False, has
     
     # Round down to the nearest interval (as defined in config)
     minute = timestamp_obj.minute
-    interval = TRANSCRIPT_AGGREGATION_MIN  # Updated variable name
+    interval = TRANSCRIPT_AGGREGATION_MIN
     rounded_minute = (minute // interval) * interval
     
     # Generate a filename based on the interval (truncate seconds and microseconds)
@@ -57,6 +57,7 @@ def save_transcript(transcript_text, timestamp, directory=None, quiet=False, has
                     data = {"entries": []}
         except Exception as e:
             # Handle any other file errors
+            logger.error(f"Error reading transcript file {filepath}: {e}")
             data = {"entries": []}
     else:
         data = {"entries": []}
@@ -69,7 +70,7 @@ def save_transcript(transcript_text, timestamp, directory=None, quiet=False, has
         json.dump(data, f, indent=4)
 
     if not quiet:
-        print(f"Transcript saved to {filepath}")
+        logger.info(f"Transcript saved to {filepath}")
     
     return filepath
 
@@ -92,7 +93,7 @@ def load_recent_transcripts(since_time):
         
         # Ensure directory exists
         if not os.path.exists(TRANSCRIPT_DIR):
-            print(f"Transcript directory not found: {TRANSCRIPT_DIR}")
+            logger.warning(f"Transcript directory not found: {TRANSCRIPT_DIR}")
             return all_transcripts
             
         # Get all JSON files in the transcript directory
@@ -122,15 +123,15 @@ def load_recent_transcripts(since_time):
                                 if entry_datetime >= since_datetime:
                                     all_transcripts.append(entry)
             except Exception as e:
-                print(f"Error processing file {filename}: {e}")
+                logger.error(f"Error processing file {filename}: {e}")
                 continue
         
         # Sort transcripts by timestamp
         all_transcripts.sort(key=lambda x: x['timestamp'])
         
-        print(f"Loaded {len(all_transcripts)} transcripts since {since_time}")
+        logger.info(f"Loaded {len(all_transcripts)} transcripts since {since_time}")
         return all_transcripts
         
     except Exception as e:
-        print(f"Error loading transcripts: {e}")
+        logger.error(f"Error loading transcripts: {e}")
         return []

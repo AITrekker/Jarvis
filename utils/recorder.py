@@ -11,7 +11,7 @@ from setup.logger import logger
 import time
 
 from config import SAMPLERATE, CHANNELS, CHUNK_DURATION, WHISPER_MODEL
-from storage.db import save_transcript
+from storage.file_store import save_transcript
 from utils.summarize import summarize_recent_transcripts
 
 # Global variables to control recording

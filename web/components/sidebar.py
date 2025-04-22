@@ -9,8 +9,8 @@ def render_sidebar():
     # Render recorder controls
     render_recorder_controls()
     
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Settings")
+    #st.sidebar.markdown("---")
+    #st.sidebar.markdown("### Settings")
     
     # Other settings can remain here
     

@@ -15,10 +15,6 @@ DATA_DIR = os.environ.get('JARVIS_DATA_DIR', os.path.join(PROJECT_ROOT, "data"))
 # Get current system
 SYSTEM = platform.system()
 
-########################
-# ENVIRONMENT VARIABLES
-########################
-
 # Streamlit telemetry settings
 ENV_VARS = {
     "STREAMLIT_BROWSER_GATHER_USAGE_STATS": "false",
@@ -59,7 +55,7 @@ CHROMA_DB_IMPL = "duckdb+parquet"
 PLATFORM_CONFIGS = {
     "Darwin": {  # macOS
         "whisper_model": "large-v3-turbo",
-        "ollama_model": "phi4",
+        "ollama_model": "mistral:instruct",
     },
     "Windows": {
         "whisper_model": "base.en",
@@ -100,8 +96,8 @@ UI_PAGE_TITLE = "Jarvis Assistant"
 UI_PAGE_ICON = "🤖"
 UI_LAYOUT = "wide"
 UI_SIDEBAR_STATE = "expanded"
-UI_DEFAULT_MODELS = ["phi4", "llama3", "mistral", "codellama"]
-UI_DEFAULT_MODEL = "phi4"
+#UI_DEFAULT_MODELS = ["phi4", "llama3", "mistral", "codellama"]
+UI_DEFAULT_MODEL = OLLAMA_MODEL
 
 ########################
 # SEARCH SETTINGS
@@ -151,16 +147,17 @@ AUDIO_FORMAT = "wav"
 LOG_LEVEL = logging.INFO  # Can be DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 # Initialize logging
-logging.basicConfig(
-    level=LOG_LEVEL,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(os.path.join(LOG_DIR, "jarvis.log"))
-    ]
-)
+# logging.basicConfig(
+#     level=LOG_LEVEL,
+#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#     handlers=[
+#         logging.StreamHandler(),
+#         logging.FileHandler(os.path.join(LOG_DIR, "jarvis.log"))
+#     ]
+# )
 
 # Create logger
+import logging
 logger = logging.getLogger(__name__)
 
 # Print initialization info
