@@ -126,5 +126,15 @@ class TestSetup(unittest.TestCase):
         check_ollama_models()
         mock_exit.assert_called_with(1)
 
+    def test_check_ollama_models(self):
+        """Test checking for required Ollama models."""
+        # Define test models
+        required_models = ["test-model", "embedding-model"]
+        
+        # Update function call to include required parameter
+        check_ollama_models(required_models)
+        
+        # Assertions and validation...
+
 if __name__ == '__main__':
     unittest.main()

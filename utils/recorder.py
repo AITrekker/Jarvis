@@ -114,7 +114,6 @@ def transcribe_from_mic():
     _paused = False
     _audio_queue = queue.Queue()
     
-    logger.info("🔊 Listening... Speak into your mic.")
     print("🔊 Listening... Speak into your mic.")
     
     # Callback to capture audio into buffer
@@ -124,7 +123,7 @@ def transcribe_from_mic():
             return
             
         if status:
-            logger.warning(f"⚠️ Audio status: {status}")
+            #logger.warning(f"⚠️ Audio status: {status}")
             print(f"⚠️ Audio status: {status}", file=sys.stderr)
         
         # Only queue if not paused, active, and queue exists
@@ -254,7 +253,8 @@ def process_audio_chunk(audio_buffer, is_final_chunk=False):
             if 'segments' in result and len(result['segments']) > 0:
                 formatted_text = format_segments(result['segments'])
                 print(f"{prefix}\n{formatted_text}")
-                save_transcript(formatted_text, datetime.utcnow().isoformat(), has_speakers=True)
+                # Changed has_speakers to False since we're not including speaker labels anymore
+                save_transcript(formatted_text, datetime.utcnow().isoformat(), has_speakers=False)
             else:
                 # Fall back to regular text
                 print(f"{prefix}{text}")
@@ -268,9 +268,8 @@ def process_audio_chunk(audio_buffer, is_final_chunk=False):
             os.remove(filename)
 
 def format_segments(segments):
-    """Format transcript segments with simple speaker detection"""
-    segments_text = []
-    current_speaker = None
+    """Format transcript segments with line breaks for speaker changes but no speaker labels"""
+    formatted_lines = []
     current_text = []
     
     for i, segment in enumerate(segments):
@@ -281,23 +280,19 @@ def format_segments(segments):
         # Speaker detection
         new_speaker = detect_speaker_change(segment, segments, i)
         
-        if new_speaker or current_speaker is None:
-            # Save previous speaker's text
-            if current_speaker is not None and current_text:
-                segments_text.append(f"{current_speaker}: {' '.join(current_text)}")
-                current_text = []
+        if new_speaker and i > 0 and current_text:
+            # Save previous speaker's text and start a new paragraph
+            formatted_lines.append(' '.join(current_text))
+            current_text = []
                 
-            # Assign a new speaker
-            current_speaker = f"Speaker {len(segments_text) % 2 + 1}"
-            
         # Add this segment's text
         current_text.append(text)
     
-    # Add the final speaker's text
-    if current_speaker and current_text:
-        segments_text.append(f"{current_speaker}: {' '.join(current_text)}")
+    # Add the final text
+    if current_text:
+        formatted_lines.append(' '.join(current_text))
     
-    return "\n".join(segments_text)
+    return "\n".join(formatted_lines)
 
 def detect_speaker_change(current_segment, all_segments, index):
     """Detect if this segment likely has a different speaker"""

@@ -3,6 +3,7 @@ import threading
 from datetime import datetime, timedelta
 from config import SUMMARY_INTERVAL_MIN
 from utils.summarize import summarize_recent_transcripts
+from utils.transcripts import delete_transcripts_in_time_range  # Import the missing function
 from setup.logger import logger
 
 # Global variables for scheduler
@@ -35,16 +36,32 @@ def summarize_job():
     print(f"\n==== SCHEDULED SUMMARY JOB [{datetime.utcnow().isoformat()}] ====")
     print(f"Running periodic summarization job (every {SUMMARY_INTERVAL_MIN} minutes)...")
     
-    # Run the summarization on recent transcripts
-    summary = summarize_recent_transcripts()
+    # Calculate the time range we'll be working with
+    end_time = datetime.utcnow()
+    start_time = end_time - timedelta(minutes=SUMMARY_INTERVAL_MIN)
     
-    if summary:
-        print("\nSUMMARY OUTPUT:")
-        print("-" * 50)
-        print(summary)
-        print("-" * 50)
-    else:
-        print("No summary was generated (likely no transcripts available)")
+    try:
+        # Run the summarization on recent transcripts
+        summary = summarize_recent_transcripts(minutes=SUMMARY_INTERVAL_MIN)
+        
+        if summary and not summary.startswith("Error"):
+            print("\nSUMMARY OUTPUT:")
+            print("-" * 50)
+            print(summary)
+            print("-" * 50)
+            
+            # Delete the transcripts in this time range only after successful summary
+            deleted_count = delete_transcripts_in_time_range(start_time, end_time)
+            if deleted_count > 0:
+                print(f"✅ Deleted {deleted_count} processed transcript files")
+        else:
+            error_msg = summary if summary else "No summary generated"
+            print(f"⚠️ No valid summary was generated: {error_msg}")
+            print("⚠️ Transcripts were NOT deleted to prevent data loss.")
+    except Exception as e:
+        logger.error(f"Error during summarization job: {e}")
+        print(f"❌ Error during summarization: {e}")
+        print("⚠️ Transcripts were NOT deleted to prevent data loss.")
     
     print(f"==== SUMMARY JOB COMPLETED ====\n")
 

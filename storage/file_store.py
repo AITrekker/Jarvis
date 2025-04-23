@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from config import TRANSCRIPT_DIR, TRANSCRIPT_AGGREGATION_MIN
 from setup.logger import logger
 
-def save_transcript(transcript_text, timestamp, directory=None, quiet=False, has_speakers=False):
+def save_transcript(transcript_text, timestamp, directory=None, quiet=True, has_speakers=False):
     """
     Save transcript text to JSON files, aggregated by intervals defined in config.TRANSCRIPT_AGGREGATION_MIN.
     Each interval gets its own file, with multiple transcripts stored as entries.
@@ -129,7 +129,7 @@ def load_recent_transcripts(since_time):
         # Sort transcripts by timestamp
         all_transcripts.sort(key=lambda x: x['timestamp'])
         
-        logger.info(f"Loaded {len(all_transcripts)} transcripts since {since_time}")
+        #logger.info(f"Loaded {len(all_transcripts)} transcripts since {since_time}")
         return all_transcripts
         
     except Exception as e:

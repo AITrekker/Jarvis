@@ -5,6 +5,9 @@ import sys
 # Add parent directory to path to import project modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# Import the base test case
+from tests.test_base import JarvisTestCase
+
 # Import the scheduler module to inspect what schedule implementation it's using
 from utils.periodic_tasks import start_scheduler
 
@@ -12,8 +15,11 @@ from utils.periodic_tasks import start_scheduler
 import inspect
 import importlib
 
-class TestScheduler(unittest.TestCase):
+class TestScheduler(JarvisTestCase):
     def setUp(self):
+        # Call the parent setUp
+        super().setUp()
+        
         # First, find out what scheduler module your code is actually using
         periodic_tasks_module = sys.modules.get('scheduler.periodic_tasks')
         
@@ -47,6 +53,9 @@ class TestScheduler(unittest.TestCase):
             # Restore original jobs
             for job in self.original_jobs:
                 self.schedule.jobs.append(job)
+        
+        # Call the parent tearDown to clean up test summaries
+        super().tearDown()
             
     def test_basic_scheduler_operation(self):
         """Test that we can interact with the scheduler."""

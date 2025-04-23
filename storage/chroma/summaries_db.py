@@ -70,7 +70,7 @@ def add_summary(
             metadatas=[metadata],
             ids=[embedding_id]
         )
-        logger.info(f"Added summary embedding to ChromaDB with ID: {embedding_id}")
+        #logger.info(f"Added summary embedding to ChromaDB with ID: {embedding_id}")
         logger.debug(f"Summary metadata: {metadata}")
         return embedding_id
     except Exception as e:

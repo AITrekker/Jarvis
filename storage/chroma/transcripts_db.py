@@ -43,7 +43,7 @@ def get_all(limit: int = 1000) -> List[Dict[str, Any]]:
             }
             formatted_results.append(formatted_result)
             
-        logger.info(f"Retrieved {len(formatted_results)} transcripts from ChromaDB")
+        #logger.info(f"Retrieved {len(formatted_results)} transcripts from ChromaDB")
         return formatted_results
     except Exception as e:
         logger.error(f"Error getting transcripts from ChromaDB: {e}", exc_info=True)

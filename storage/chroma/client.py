@@ -91,7 +91,7 @@ def initialize_chroma(force: bool = False) -> bool:
         logger.debug(f"Using ChromaDB directory: {config.CHROMA_DIR}")
         
         # Initialize ChromaDB client with telemetry disabled
-        logger.info("Initializing ChromaDB client...")
+        #logger.info("Initializing ChromaDB client...")
         chroma_client = chromadb.PersistentClient(
             path=config.CHROMA_DIR,
             settings=chromadb.Settings(anonymized_telemetry=False)
@@ -109,7 +109,7 @@ def initialize_chroma(force: bool = False) -> bool:
         except (ImportError, AttributeError):
             pass
             
-        logger.info("ChromaDB initialization complete")
+        #logger.info("ChromaDB initialization complete")
         return True
             
     except Exception as e:
@@ -123,12 +123,12 @@ def _initialize_collection(name: str):
     try:
         logger.debug(f"Attempting to get existing '{name}' collection...")
         collection = chroma_client.get_collection(name=name)
-        logger.info(f"Loaded existing '{name}' collection")
+        #logger.info(f"Loaded existing '{name}' collection")
         return collection
     except Exception as e:
         logger.debug(f"Creating new '{name}' collection: {e}")
         collection = chroma_client.create_collection(name=name)
-        logger.info(f"Created new '{name}' collection")
+        #logger.info(f"Created new '{name}' collection")
         return collection
 
 # Initialize by default unless in test mode

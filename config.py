@@ -2,6 +2,16 @@ import os
 import platform
 import whisper
 import logging
+import argparse
+import sys
+
+# Parse arguments for debug mode
+parser = argparse.ArgumentParser(description="Jarvis AI Assistant")
+parser.add_argument("--debug", "-d", action="store_true", help="Enable debug mode")
+args, unknown = parser.parse_known_args()
+
+# Debug setting
+DEBUG_MODE = args.debug or False
 
 #######################
 # ENVIRONMENT SETTINGS
@@ -54,16 +64,13 @@ CHROMA_DB_IMPL = "duckdb+parquet"
 # Platform-specific configurations
 PLATFORM_CONFIGS = {
     "Darwin": {  # macOS
-        "whisper_model": "large-v3-turbo",
-        "ollama_model": "mistral:instruct",
+        "whisper_model": "large-v3-turbo"
     },
     "Windows": {
-        "whisper_model": "base.en",
-        "ollama_model": "llama3.2",
+        "whisper_model": "base.en"
     },
     "Linux": {  # Default fallback
-        "whisper_model": "tiny.en",
-        "ollama_model": "llama3.2",
+        "whisper_model": "tiny.en"
     }
 }
 
@@ -75,7 +82,7 @@ MODEL_NAME = config["whisper_model"]
 WHISPER_MODEL = whisper.load_model(MODEL_NAME)  # Direct loading (no lazy loading)
 
 # Ollama settings
-OLLAMA_MODEL = config["ollama_model"]
+OLLAMA_MODEL =  "mistral:instruct"
 OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
 
 ########################
