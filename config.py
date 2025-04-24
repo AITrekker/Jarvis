@@ -64,13 +64,16 @@ CHROMA_DB_IMPL = "duckdb+parquet"
 # Platform-specific configurations
 PLATFORM_CONFIGS = {
     "Darwin": {  # macOS
-        "whisper_model": "large-v3-turbo"
+        "whisper_model": "large-v3-turbo",
+        "ollama_model": "mistral:instruct"
     },
     "Windows": {
-        "whisper_model": "base.en"
+        "whisper_model": "base.en",
+        "ollama_model": "gemma:2b"
     },
     "Linux": {  # Default fallback
-        "whisper_model": "tiny.en"
+        "whisper_model": "tiny.en",
+        "ollama_model": "mistral:instruct"
     }
 }
 
@@ -82,7 +85,7 @@ MODEL_NAME = config["whisper_model"]
 WHISPER_MODEL = whisper.load_model(MODEL_NAME)  # Direct loading (no lazy loading)
 
 # Ollama settings
-OLLAMA_MODEL =  "mistral:instruct"
+OLLAMA_MODEL = config["ollama_model"]
 OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
 
 ########################

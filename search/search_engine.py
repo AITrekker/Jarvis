@@ -129,7 +129,7 @@ def unified_search(query: str,
                    embedding: List[float], 
                    top_k: int = 5, 
                    use_rag: bool = True,
-                   model: str = OLLAMA_MODEL) -> Dict[str, Any]:  # Use OLLAMA_MODEL instead of "phi3"
+                   model: str = OLLAMA_MODEL) -> Dict[str, Any]:
     """
     Unified search function that combines vector search with optional RAG.
     
