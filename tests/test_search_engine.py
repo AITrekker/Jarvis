@@ -36,19 +36,19 @@ class TestSearchEngine(unittest.TestCase):
         mock_search.assert_called_once_with([0.1, 0.2, 0.3], top_k=3)
         mock_rag.assert_called_once()
     
-    @patch('search.search_engine.search_summaries')
-    def test_unified_search_no_results(self, mock_search):
+    def test_unified_search_no_results(self):
         """Test unified_search with no results."""
-        # Setup
-        mock_search.return_value = []
-        
-        # Execute
-        result = unified_search(
-            query="test query",
-            embedding=[0.1, 0.2, 0.3],
-            use_rag=False
-        )
-        
-        # Assert
-        self.assertFalse(result["success"])
-        self.assertIn("No results found", result["message"])
+        # Mock the search_summaries and search_by_keywords functions
+        with patch("search.search_engine.search_summaries") as mock_search_summaries, \
+             patch("search.search_engine.search_by_keywords") as mock_search_keywords:
+            # Set up mocks to return empty results
+            mock_search_summaries.return_value = []
+            mock_search_keywords.return_value = []
+            
+            # Call the function
+            result = unified_search("test query", [0.1, 0.2, 0.3])
+            
+            # Actual current behavior has success=False
+            self.assertFalse(result["success"])
+            self.assertEqual(result.get("message"), "No results found")
+            self.assertEqual(len(result.get("raw_results", [])), 0)

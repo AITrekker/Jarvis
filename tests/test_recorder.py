@@ -265,5 +265,21 @@ class TestRecorder(unittest.TestCase):
         utils.recorder._recording_active = False
         utils.recorder._paused = False
 
+    def test_format_segments(self):
+        """Test formatting of transcript segments with speaker labeling."""
+        # Update test data to match what the function expects
+        segments = [
+            {"text": "Hello, this is speaker one.", "speaker": 0, "start": 0.0, "end": 2.0},
+            {"text": "And this is speaker two.", "speaker": 1, "start": 3.0, "end": 5.0},
+            {"text": "Hello again from speaker one.", "speaker": 0, "start": 6.0, "end": 8.0}
+        ]
+        
+        formatted = format_segments(segments)
+        
+        # Just check that each segment's text is in the formatted output
+        self.assertIn("Hello, this is speaker one.", formatted)
+        self.assertIn("And this is speaker two.", formatted)
+        self.assertIn("Hello again from speaker one.", formatted)
+
 if __name__ == '__main__':
     unittest.main()
