@@ -1,5 +1,16 @@
 """
-Operations for managing summary documents in ChromaDB.
+Summary Vector Database Operations Module
+
+This module provides functionality for working with summary documents in ChromaDB.
+
+Role in the system:
+- Stores conversation summaries with metadata in ChromaDB
+- Retrieves summaries via semantic search or by ID
+- Manages summary deletion and cleanup operations
+- Handles embeddings associated with summaries for vector search
+- Formats summary data consistently for front-end consumption
+
+Used by chroma_store.py to manage summary data in the vector database.
 """
 import json
 import uuid

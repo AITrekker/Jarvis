@@ -1,3 +1,20 @@
+"""
+UI Elements Utility Module
+
+This module provides common UI elements and styling helpers used across
+the Jarvis web application components.
+
+Role in the system:
+- Provides consistent styling for UI components
+- Loads CSS for custom appearance and animations
+- Contains reusable UI elements and component templates
+- Handles custom formatting and display logic
+- Ensures visual consistency throughout the application
+
+Used by various web components to maintain a consistent look and feel
+across the entire Jarvis web interface.
+"""
+
 import streamlit as st
 
 def load_css():

@@ -1,3 +1,20 @@
+"""
+Session State Management Module
+
+This module handles the initialization and management of session state variables
+used throughout the Jarvis web application.
+
+Role in the system:
+- Initializes session state variables on application startup
+- Provides default values for settings and configuration
+- Ensures consistent session state across different components
+- Manages persistence of user preferences and history
+- Centralizes session state management to avoid duplication
+
+Used by the main web UI during initialization and by components that need
+access to persistent state variables.
+"""
+
 import streamlit as st
 
 def initialize_session_state():

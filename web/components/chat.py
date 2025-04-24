@@ -1,3 +1,19 @@
+"""
+Chat Interface Component Module
+
+This module provides the chat interface functionality for the Jarvis web application,
+allowing users to interact with Jarvis through text-based conversations.
+
+Role in the system:
+- Manages chat history in the session state
+- Handles user message input and processing
+- Displays conversation history in a chat-like interface
+- Connects chat input to the search and RAG functionality
+- Provides UI elements for chat interaction (input box, message display)
+
+Used by the main web UI to provide text-based interaction with Jarvis.
+"""
+
 import streamlit as st
 from web.web_utils.search_handler import search_conversations
 
@@ -44,7 +60,15 @@ def handle_chat_input():
                         for i, result in enumerate(search_result["raw_results"], 1):
                             date = result["metadata"]["timestamp"].split("T")[0]
                             summary = result["metadata"]["summary"]
-                            relevance = 100 * (1 - result["distance"])
+                            
+                            # Calculate relevance from either distance or similarity
+                            if "distance" in result:
+                                relevance = 100 * (1 - result["distance"]) 
+                            elif "similarity" in result:
+                                relevance = 100 * result["similarity"]
+                            else:
+                                relevance = 50  # Default value if neither exists
+                                
                             st.markdown(f"**Result {i} - {date} (Relevance: {relevance:.1f}%)**")
                             st.markdown(summary)
                             st.markdown("---")

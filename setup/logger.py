@@ -1,3 +1,21 @@
+"""
+Logging Configuration Module
+
+This module configures and sets up the logging system for Jarvis, providing consistent 
+logging capabilities throughout the application.
+
+Role in the system:
+- Creates and configures both file and console log handlers
+- Sets up daily log rotation with date-stamped filenames
+- Provides functions to dynamically change log levels
+- Ensures log directory exists before attempting to write logs
+- Prevents duplicate log entries by managing handlers properly
+
+Used by all modules in the system that need to log information, warnings, errors, or debug data.
+The configured logger is imported by other modules to maintain consistent logging format 
+and behavior throughout the application.
+"""
+
 import logging
 import os
 from datetime import datetime

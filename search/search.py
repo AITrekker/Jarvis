@@ -1,3 +1,19 @@
+"""
+Basic Search Functionality Module
+
+This module provides the core search functionality for Jarvis, serving as a high-level
+wrapper for vector search operations. It handles the conversion of text queries to
+embeddings and performs vector searches through ChromaDB.
+
+Role in the system:
+- Primary entry point for simple vector searches
+- Converts text queries to embeddings
+- Performs vector searches using the chroma_store module
+- Handles errors and provides appropriate logging
+
+Used by higher-level search interfaces like search_engine.py and search_cli.py.
+"""
+
 from utils.summarize import generate_embedding
 from storage.chroma_store import search_summaries
 from setup.logger import logger

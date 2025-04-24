@@ -1,3 +1,20 @@
+"""
+Jarvis Environment Setup Script
+
+This script handles the initial setup of the Jarvis application environment,
+creating a virtual environment and installing dependencies.
+
+Role in the system:
+- Creates a Python virtual environment with proper version checking
+- Installs required Python dependencies from requirements.txt
+- Configures environment variables and paths
+- Provides platform-specific setup instructions
+- Guides users through manual dependency installation steps
+
+This script should be run once when first setting up the Jarvis application
+or when recreating the environment after significant changes.
+"""
+
 import subprocess
 import sys
 import os

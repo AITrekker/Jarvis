@@ -1,6 +1,17 @@
 """
-ChromaDB integration for Jarvis.
-This module provides top-level functions for ChromaDB operations.
+ChromaDB Integration Module
+
+This module provides top-level functions for ChromaDB operations, serving as the main
+entry point for vector database operations in the Jarvis application.
+
+Role in the system:
+- Re-exports key functions from specialized ChromaDB modules
+- Provides backward compatibility for code using the original API
+- Initializes ChromaDB when imported (unless in test mode)
+- Handles adding, searching, and retrieving embeddings for summaries and transcripts
+- Manages error handling and exceptions for ChromaDB operations
+
+Used by various parts of the application that need to store or retrieve vector data.
 """
 import json
 import uuid

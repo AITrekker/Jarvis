@@ -1,3 +1,19 @@
+"""
+Command Line Interface for Search
+
+This module provides a standalone command-line interface for searching through
+conversation transcripts and summaries stored in ChromaDB.
+
+Role in the system:
+- Offers direct command-line access to search functionality
+- Validates ChromaDB data availability
+- Provides interactive search experience
+- Formats results for terminal display
+
+This is a standalone utility that can be run directly for command-line searching
+without needing to start the web interface.
+"""
+
 import sys
 import os
 

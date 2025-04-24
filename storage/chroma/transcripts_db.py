@@ -1,5 +1,16 @@
 """
-Operations for managing transcript documents in ChromaDB.
+Transcript Vector Database Operations Module
+
+This module provides functionality for working with transcript documents in ChromaDB.
+
+Role in the system:
+- Stores conversation transcripts with metadata in ChromaDB
+- Retrieves transcript records via search, by ID or in bulk
+- Deletes transcript records when associated summaries are removed
+- Handles error cases with proper exception handling and logging
+- Formats transcript data for consistency across the application
+
+Used by chroma_store.py to manage transcript data in the vector database.
 """
 import uuid
 from datetime import datetime

@@ -1,3 +1,19 @@
+"""
+Search Handler Module
+
+This module provides the integration between the web interface and the search functionality,
+handling search requests and formatting responses for display.
+
+Role in the system:
+- Processes search queries from the web interface
+- Calls the appropriate search functions from the search engine
+- Formats search results for web display
+- Handles error cases and edge conditions
+- Provides consistent search behavior across different web components
+
+Used by web components that need to perform searches, such as the Chat and Topic Explorer.
+"""
+
 import streamlit as st
 from utils.summarize import generate_embedding  
 from search.search_engine import unified_search

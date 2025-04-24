@@ -1,5 +1,17 @@
 """
-ChromaDB client initialization and management.
+ChromaDB Client Configuration Module
+
+This module handles initialization and management of the ChromaDB client and collections
+for vector storage operations.
+
+Role in the system:
+- Creates and manages the ChromaDB client instance
+- Initializes and provides access to summary and transcript collections
+- Handles test mode detection to avoid DB operations during testing
+- Provides retry logic for initialization during application startup
+- Manages connections to the persistent ChromaDB storage
+
+Used by other storage modules to interact with ChromaDB vector collections.
 """
 import os
 import sys

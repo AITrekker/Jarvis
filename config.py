@@ -94,6 +94,9 @@ OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_URL = f"{OLLAMA_BASE_URL}/api/generate"
 OLLAMA_EMBEDDINGS_URL = f"{OLLAMA_BASE_URL}/api/embeddings"
 
+# Ollama API settings
+OLLAMA_STREAM = False  # Whether to stream responses from Ollama
+
 ########################
 # UI SETTINGS
 ########################
@@ -170,3 +173,20 @@ logger = logging.getLogger(__name__)
 # Print initialization info
 logger.info(f"Running on {SYSTEM}")
 logger.info(f"Using Ollama model: {OLLAMA_MODEL}")
+
+# Ollama RAG system prompt
+OLLAMA_RAG_SYSTEM_PROMPT = """You are Jarvis, a professional and helpful AI personal assistant with access to past conversation embeddings and summaries.
+When responding to the user's query, prioritize exact matches and closely related content from the provided documents.
+Explicitly reference specific information from the documents when appropriate.
+Do not make up information. If the provided documents do not contain relevant information, clearly state that."""
+
+# RAG prompt configuration
+RAG_QUERY_PREFIX = "Query: "
+RAG_CONTEXT_HEADER = "\n\nRelevant conversation history:\n"
+RAG_DOCUMENT_HEADER = "\n--- Document {num} (Relevance: {relevance:.1f}%) ---\n"
+RAG_DATE_FORMAT = "Date: {timestamp}\n"
+RAG_SUMMARY_FORMAT = "Summary: {summary}\n"
+RAG_FINAL_INSTRUCTION = "\nPlease provide a professional and helpful response using only the provided documents. Prioritize exact matches and explicitly reference relevant documents. If no relevant information is found, clearly state that."
+
+# RAG relevance calculation
+RAG_RELEVANCE_FACTOR = 100  # Multiply (1 - distance) by this factor

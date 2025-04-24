@@ -3,10 +3,12 @@ import sys
 import unittest
 import time
 import argparse
-from tests.test_helpers import cleanup_test_summaries
 
 # Add parent directory to path to import project modules
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Import the test utilities from the debug folder
+from debug.test_utils import cleanup_test_summaries
 
 # Handle the debug flag directly in run_tests.py
 parser = argparse.ArgumentParser(description="Run Jarvis test suite")

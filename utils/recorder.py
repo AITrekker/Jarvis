@@ -1,3 +1,22 @@
+"""
+Audio Recording and Transcription Module
+
+This module provides functionality for real-time audio recording, transcription,
+and processing of spoken conversations.
+
+Role in the system:
+- Captures audio input from the system microphone
+- Processes audio chunks in real-time using Whisper model
+- Detects speaker changes based on pauses and conversation patterns
+- Saves transcribed text to the file storage system
+- Manages recording state (start, pause, resume, stop)
+- Triggers summarization of transcribed content
+
+Used as the primary audio input system for Jarvis, allowing continuous
+recording and transcription of conversations for later search and reference.
+Controls the audio processing lifecycle with thread-safe management of resources.
+"""
+
 import sounddevice as sd
 import numpy as np
 import tempfile

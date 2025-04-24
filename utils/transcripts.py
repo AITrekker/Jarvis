@@ -1,3 +1,19 @@
+"""
+Transcript Management Utilities
+
+This module provides functions for managing transcript files and data,
+particularly focused on file operations and cleanup.
+
+Role in the system:
+- Deletes transcript files within specified time ranges
+- Handles transcript file naming conventions and formats
+- Provides safe deletion with error handling and logging
+- Supports the summarization workflow by cleaning up processed transcripts
+
+Used primarily by the periodic task scheduler and summarization processes
+to manage transcript lifecycle.
+"""
+
 import os
 import glob
 from datetime import datetime

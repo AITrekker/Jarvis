@@ -1,3 +1,19 @@
+"""
+File-based Storage Module
+
+This module handles file-based storage operations for transcripts and other data,
+organizing information into time-based files for efficient retrieval.
+
+Role in the system:
+- Saves transcripts to JSON files organized by time intervals
+- Groups related transcripts into single files for efficient storage
+- Loads recent transcripts based on timestamps for processing
+- Handles file creation, reading, and updating operations
+- Manages error cases and file corruption scenarios
+
+Used primarily by the transcription system to persist conversation data to disk.
+"""
+
 import os
 import json
 from datetime import datetime, timedelta

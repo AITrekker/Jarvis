@@ -1,3 +1,21 @@
+"""
+Jarvis Application Launcher
+
+This script serves as the main entry point for starting the Jarvis application,
+initializing all required components and services.
+
+Role in the system:
+- Performs dependency checks and validation
+- Initializes logging and configuration
+- Starts required background services (Ollama, ChromaDB)
+- Launches the recorder and transcription system
+- Initializes and starts the web interface
+- Handles graceful shutdown on exit
+
+To run the Jarvis application, users should execute this script after completing
+the initial setup process with setup_Jarvis.py.
+"""
+
 import argparse
 import subprocess
 import sys
@@ -9,15 +27,21 @@ import itertools
 
 def ensure_venv():
     """Ensure the script is running inside a virtual environment."""
-    in_venv = hasattr(sys, 'real_prefix') or (getattr(sys, 'base_prefix', sys.prefix) != sys.prefix)
+    # More reliable venv detection for all platforms including macOS
+    in_venv = (
+        hasattr(sys, 'real_prefix') or 
+        (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix) or
+        os.environ.get('VIRTUAL_ENV') is not None
+    )
+    
     if not in_venv:
         if os.name == "nt":
             activate_cmd = r".venv\Scripts\activate.bat"
         else:
             activate_cmd = "source .venv/bin/activate"
         print(
-            f"\n[ERROR] You are not running inside the virtual environment!\n"
-            f"Please activate it first:\n\n    {activate_cmd}\n"
+            f"\n🛑 JARVIS likes to run inside a virtual environment!\n"
+            f"\nPlease activate it first:\n    {activate_cmd}\n"
             f"\nThen run this script again.\n"
         )
         sys.exit(1)

@@ -1,3 +1,19 @@
+"""
+Recorder Control Component Module
+
+This module provides UI elements for controlling the audio recorder functionality
+within the Jarvis web application.
+
+Role in the system:
+- Displays recording status and controls
+- Handles start, stop, pause, and resume actions
+- Updates the UI based on recorder state changes
+- Provides visual feedback for recording activity
+- Connects UI actions to the recorder backend functionality
+
+Used by the main web UI to allow users to control voice recording.
+"""
+
 import streamlit as st
 import time
 import threading

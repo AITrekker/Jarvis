@@ -1,3 +1,19 @@
+"""
+Sidebar Component Module
+
+This module provides the sidebar functionality for the Jarvis web application,
+organizing navigation, controls, and information in the side panel.
+
+Role in the system:
+- Displays application information and branding
+- Contains recorder controls for audio capture
+- Provides access to settings and configuration
+- Shows system status information
+- Houses auxiliary controls and information panels
+
+Used by the main web UI to provide consistent sidebar navigation and controls.
+"""
+
 import streamlit as st
 from web.components.recorder_controls import render_recorder_controls
 

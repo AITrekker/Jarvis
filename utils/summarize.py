@@ -1,3 +1,20 @@
+"""
+Conversation Summarization Module
+
+This module provides functionality to generate concise summaries of conversation
+transcripts using LLM technology.
+
+Role in the system:
+- Reads transcript files from disk
+- Processes raw transcripts into formats suitable for summarization
+- Interfaces with LLM services to generate summaries
+- Saves generated summaries with appropriate metadata
+- Manages the workflow from transcript to searchable summary
+
+Used by the scheduled summarization job to process conversation transcripts
+into searchable summaries for future reference.
+"""
+
 import requests
 import json
 from datetime import datetime, timedelta

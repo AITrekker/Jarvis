@@ -1,3 +1,20 @@
+"""
+Web User Interface Module
+
+This module provides the user interface for the Jarvis web application,
+based on Streamlit, enabling users to interact with Jarvis through the browser.
+
+Role in the system:
+- Creates and manages the main UI for Jarvis
+- Sets up navigation between different tabs/pages
+- Initializes session state for web interactions
+- Handles user input and displays responses
+- Integrates all web components into a unified interface
+
+This is the main entry point for the web-based interface, handling page
+routing and component initialization.
+"""
+
 import streamlit as st
 import os
 import sys

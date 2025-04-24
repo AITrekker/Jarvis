@@ -1,3 +1,20 @@
+"""
+System Setup and Dependency Validation Module
+
+This module provides functionality to verify and set up the system dependencies 
+required for Jarvis to function correctly.
+
+Role in the system:
+- Checks for required external dependencies (FFmpeg, Ollama)
+- Validates Ollama server availability and API functionality
+- Ensures necessary Ollama models are installed
+- Automatically pulls missing models when possible
+- Provides clear error messages and installation instructions when dependencies are missing
+
+Used during system startup to ensure all prerequisites are met before the
+application begins operation. Prevents runtime errors by validating dependencies early.
+"""
+
 import shutil
 import sys
 import requests

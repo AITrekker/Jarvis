@@ -1,3 +1,20 @@
+"""
+Periodic Task Scheduler Module
+
+This module provides functionality for scheduling and executing periodic tasks
+such as summarization of conversation transcripts.
+
+Role in the system:
+- Sets up the scheduler for periodic execution of tasks
+- Defines job functions that run on schedule
+- Manages the summarization workflow on a regular basis
+- Handles errors in scheduled jobs with appropriate logging
+- Provides proper cleanup after job execution
+
+Used during application startup to initialize background tasks that run
+periodically while the application is active.
+"""
+
 import time
 import threading
 from datetime import datetime, timedelta
