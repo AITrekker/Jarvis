@@ -18,18 +18,26 @@ import streamlit as st
 from web.components.recorder_controls import render_recorder_controls
 
 def render_sidebar():
-    """Render the sidebar with controls."""
+    """Render the sidebar with controls and navigation."""
     st.sidebar.title("Jarvis")
     st.sidebar.markdown("---")
     
-    # Render recorder controls
+    # Create navigation tabs in the sidebar
+    selected_tab = st.sidebar.radio(
+        "Navigation",
+        ["Chat", "Topic Explorer", "Conversation Timeline"],
+        key="sidebar_navigation",
+        format_func=lambda x: f"💬 {x}" if x == "Chat" else 
+                             f"🔍 {x}" if x == "Topic Explorer" else
+                             f"📅 {x}" if x == "Conversation Timeline" else x
+    )
+    
+    # Render recorder controls below navigation
+    st.sidebar.markdown("---")
     render_recorder_controls()
     
-    #st.sidebar.markdown("---")
-    #st.sidebar.markdown("### Settings")
-    
-    # Other settings can remain here
-    
+    return selected_tab
+
     st.sidebar.markdown("---")
     st.sidebar.markdown("### About")
     st.sidebar.info("""

@@ -86,20 +86,19 @@ def main():
     # Setup the page
     setup_page()
     
-    # Render sidebar
-    render_sidebar()
+    # Render sidebar and get selected tab
+    selected_tab = render_sidebar()
     
-    # Create and render tabs
-    tabs = st.tabs(["💬 Chat", "🔍 Topic Explorer", "📅 Conversation Timeline"])
-    
-    with tabs[0]:
+    # Render the appropriate component based on sidebar selection
+    if selected_tab == "Chat":
         render_chat_page()
-    
-    with tabs[1]:
+    elif selected_tab == "Topic Explorer":
         render_topic_explorer()
-        
-    with tabs[2]:
+    elif selected_tab == "Conversation Timeline":
         render_timeline_tab()
+    else:
+        # Default to chat
+        render_chat_page()
 
 if __name__ == "__main__":
     main()

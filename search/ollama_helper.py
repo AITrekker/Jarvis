@@ -76,20 +76,19 @@ def query_ollama(system_prompt, user_prompt, model=OLLAMA_MODEL, temperature=OLL
 def rag_search(query: str, results: List[Dict[str, Any]], model: str = OLLAMA_MODEL) -> str:
     """
     Perform RAG search using Ollama.
-    
-    Args:
-        query: User's query
-        results: Normalized search results
-        model: Model to use for RAG (defaults to OLLAMA_MODEL from config)
-        
-    Returns:
-        Generated RAG response
     """
+    # Add this to your rag_search function to help debug
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info(f"RAG Query: '{query}'")
+    
     # Extract content from results and ensure we have valid content
     documents = []
     for result in results:
         # Get content from result, with multiple fallbacks
         content = None
+        timestamp = result.get("metadata", {}).get("timestamp", "Unknown date")
         
         # Try the standard 'content' field first
         if "content" in result and result["content"]:
@@ -102,22 +101,42 @@ def rag_search(query: str, results: List[Dict[str, Any]], model: str = OLLAMA_MO
             content = result["document"]
         
         if content:
-            documents.append(content)
+            # Calculate relevance using your configuration
+            relevance = 0
+            if "distance" in result:
+                relevance = RAG_RELEVANCE_FACTOR * (1 - result["distance"])
+            elif "similarity" in result:
+                relevance = RAG_RELEVANCE_FACTOR * result["similarity"]
+            else:
+                relevance = 50
+            documents.append({"content": content, "timestamp": timestamp, "relevance": relevance})
+    
+    # Now log the document information AFTER creating the documents list
+    logger.info(f"Number of documents: {len(documents)}")
+    if documents:
+        logger.info(f"Top document relevance: {documents[0]['relevance']:.1f}%")
+    else:
+        logger.info("No documents found")
     
     # If no valid documents found, return error message
     if not documents:
         return "I couldn't find any relevant information to answer your question."
     
-    # Prepare system prompt with context
-    context = "\n\n".join(f"Document {i+1}:\n{doc}" for i, doc in enumerate(documents))
-    system_prompt = f"""You are Jarvis, an AI assistant providing answers based on specific conversation transcripts.
-Answer the user's question based ONLY on the information in these conversation transcripts.
-If the transcripts don't contain relevant information, say so clearly.
-
-Here are the relevant conversation transcripts:
-
-{context}"""
-
-    # Use the existing query_ollama function instead of the undefined generate_response
-    response = query_ollama(system_prompt, query, model=model)
+    # Sort documents by relevance
+    documents.sort(key=lambda x: x["relevance"], reverse=True)
+    
+    # Build context using your configuration
+    context = RAG_CONTEXT_HEADER
+    
+    for i, doc in enumerate(documents, 1):
+        context += RAG_DOCUMENT_HEADER.format(num=i, relevance=doc["relevance"])
+        context += RAG_DATE_FORMAT.format(timestamp=doc["timestamp"])
+        context += RAG_SUMMARY_FORMAT.format(summary=doc["content"])
+    
+    # Create full prompt
+    system_prompt = OLLAMA_RAG_SYSTEM_PROMPT
+    user_prompt = f"{RAG_QUERY_PREFIX}{query}{context}{RAG_FINAL_INSTRUCTION}"
+    
+    # Generate response
+    response = query_ollama(system_prompt, user_prompt, model=model)
     return response
