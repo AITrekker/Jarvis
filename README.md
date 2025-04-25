@@ -1,3 +1,16 @@
+    ╔════════════════════════════════════════════════════════════╗
+    ║                                                            ║
+    ║         ██╗  █████╗  ██████╗  ██╗   ██╗ ██╗ ███████╗       ║
+    ║         ██║ ██╔══██╗ ██╔══██╗ ██║   ██║ ██║ ██╔════╝       ║
+    ║         ██║ ███████║ ██████╔╝ ██║   ██║ ██║ ███████╗       ║
+    ║         ██║ ██╔══██║ ██╔══██╗ ╚██╗ ██╔╝ ██║ ╚════██║       ║
+    ║      █████║ ██║  ██║ ██║  ██║  ╚████╔╝  ██║ ███████║       ║
+    ║      ╚════╝ ╚═╝  ╚═╝ ╚═╝  ╚═╝   ╚═══╝   ╚═╝ ╚══════╝       ║
+    ║                                                            ║
+    ║   Your AI assistant that listens, remembers, and recalls   ║
+    ║                                                            ║
+    ╚════════════════════════════════════════════════════════════╝
+
 # Jarvis - AI-Powered Voice Intelligence Platform
 
 Jarvis is an advanced voice intelligence system that transforms spoken conversations into searchable, actionable knowledge. By combining real-time transcription, AI-powered summarization, and semantic search capabilities, Jarvis creates a comprehensive memory system for all your important conversations.
