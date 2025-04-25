@@ -3,15 +3,6 @@ Chat Interface Component Module
 
 This module provides the chat interface functionality for the Jarvis web application,
 allowing users to interact with Jarvis through text-based conversations.
-
-Role in the system:
-- Manages chat history in the session state
-- Handles user message input and processing
-- Displays conversation history in a chat-like interface
-- Connects chat input to the search and RAG functionality
-- Provides UI elements for chat interaction (input box, message display)
-
-Used by the main web UI to provide text-based interaction with Jarvis.
 """
 
 import streamlit as st
@@ -21,19 +12,28 @@ def render_chat_page():
     """Render the Chat page."""
     st.header("💬 Chat with Jarvis")
     
-    # Display chat history
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-    
-    # Add input field with callback
+    # Add input field with callback at the top so it doesn't move
     st.text_input(
         "Ask Jarvis a question...",
         key="chat_input",
         on_change=handle_chat_input,
         placeholder="Type your question and press Enter..."
     )
+    
+    # Display chat history in reverse order (newest messages first)
+    for message in reversed(st.session_state.messages):
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            
+            # If this is an assistant message with sources, show them in an expander
+            if message["role"] == "assistant" and "sources" in message:
+                with st.expander("View Source Results"):
+                    for i, source in enumerate(message["sources"], 1):
+                        st.markdown(f"**Result {i} - {source['date']} (Relevance: {source['relevance']:.1f}%)**")
+                        st.markdown(source["summary"])
+                        st.markdown("---")
 
+# Keep your handle_chat_input function unchanged
 def handle_chat_input():
     """Handle user input from the chat interface."""
     prompt = st.session_state.chat_input
@@ -41,42 +41,42 @@ def handle_chat_input():
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
         
-        # Display user message
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        # Search with RAG enhancement
+        search_result = search_conversations(prompt, top_k=5)
         
-        # Generate response from search
-        with st.chat_message("assistant"):
-            with st.spinner("Searching conversations..."):
-                # Search with RAG enhancement
-                search_result = search_conversations(prompt, top_k=5)
-                
-                if search_result and "rag_response" in search_result:
-                    # Display the RAG-enhanced response
-                    st.markdown(search_result["rag_response"])
-                    
-                    # Add "View Source Results" expander
-                    with st.expander("View Source Results"):
-                        for i, result in enumerate(search_result["raw_results"], 1):
-                            date = result["metadata"]["timestamp"].split("T")[0]
-                            summary = result["metadata"]["summary"]
-                            
-                            # Calculate relevance from either distance or similarity
-                            if "distance" in result:
-                                relevance = 100 * (1 - result["distance"]) 
-                            elif "similarity" in result:
-                                relevance = 100 * result["similarity"]
-                            else:
-                                relevance = 50  # Default value if neither exists
-                                
-                            st.markdown(f"**Result {i} - {date} (Relevance: {relevance:.1f}%)**")
-                            st.markdown(summary)
-                            st.markdown("---")
-                else:
-                    st.markdown("I couldn't find any relevant information in your conversations.")
-        
-        # Add assistant response to chat history
+        # Create assistant response
         if search_result and "rag_response" in search_result:
-            st.session_state.messages.append({"role": "assistant", "content": search_result["rag_response"]})
+            response = search_result["rag_response"]
+            
+            # Store source results with the message for display in the UI
+            sources = []
+            for result in search_result["raw_results"]:
+                date = result["metadata"]["timestamp"].split("T")[0]
+                summary = result["metadata"]["summary"]
+                
+                # Calculate relevance
+                if "distance" in result:
+                    relevance = 100 * (1 - result["distance"]) 
+                elif "similarity" in result:
+                    relevance = 100 * result["similarity"]
+                else:
+                    relevance = 50  # Default value if neither exists
+                
+                sources.append({
+                    "date": date, 
+                    "summary": summary, 
+                    "relevance": relevance
+                })
+            
+            # Add assistant response to chat history with sources
+            st.session_state.messages.append({
+                "role": "assistant", 
+                "content": response,
+                "sources": sources
+            })
         else:
-            st.session_state.messages.append({"role": "assistant", "content": "I couldn't find any relevant information in your conversations."})
+            response = "I couldn't find any relevant information in your conversations."
+            st.session_state.messages.append({"role": "assistant", "content": response})
+        
+        # Clear the input field after submission
+        st.session_state.chat_input = ""
