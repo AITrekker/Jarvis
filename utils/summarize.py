@@ -93,7 +93,7 @@ def create_summary_prompt(transcripts, max_tokens=3000):
     combined_text = "\n".join(texts)
 
     # Apply chunking only if enabled in config
-    if USE_SUMMARY_CHUNKING and len(combined_text) > SUMMARY_MAX_CHARS:
+    if (USE_SUMMARY_CHUNKING and len(combined_text) > SUMMARY_MAX_CHARS):
         # Split into multiple chunks instead of truncating
         chunks = []
         start = 0
@@ -133,7 +133,7 @@ def summarize_recent_transcripts():
     
     if not transcripts:
         print("No recent transcripts found to summarize.")
-        return None
+        return "No recent transcripts found to summarize."
     
     print(f"Found {len(transcripts)} transcript entries to summarize.")
     
@@ -143,10 +143,33 @@ def summarize_recent_transcripts():
     print("Generating summary with Ollama...")
     summary = generate_with_ollama(prompt)
     
-    # Save the summary
-    save_summary(summary, transcripts)
+    # Check if summary generation was successful
+    if not summary or summary.startswith("Error"):
+        error_msg = summary if summary else "No summary generated"
+        print(f"⚠️ No valid summary was generated: {error_msg}")
+        print("⚠️ Transcripts were NOT deleted to prevent data loss.")
+        return error_msg
     
-    print("✅ Summary generated and saved.")
+    # Save the summary
+    filepath = save_summary(summary, transcripts)
+    
+    # Handle transcript deletion based on summarization results
+    if filepath:
+        print("✅ Summary generated and saved.")
+        
+        # Import here to avoid circular imports
+        from utils.transcripts import delete_transcripts_in_time_range
+        
+        # Delete the transcripts in this time range only after successful summary
+        start_time = previous_interval_start
+        end_time = interval_start
+        deleted_count = delete_transcripts_in_time_range(start_time, end_time)
+        if deleted_count > 0:
+            print(f"✅ Deleted {deleted_count} processed transcript files")
+    else:
+        print("❌ Failed to save summary.")
+        print("⚠️ Transcripts were NOT deleted to prevent data loss.")
+    
     return summary
 
 def save_summary(summary_text, source_transcripts):
@@ -223,18 +246,3 @@ def save_summary(summary_text, source_transcripts):
     )
     
     return filepath
-
-def summarize_text(text):
-    """Legacy function for simple text summarization"""
-    print("Summarizing single text...")
-    prompt = f"""Please summarize the following text:
-
-{text}
-
-Provide a concise summary that captures the main points."""
-    
-    return generate_with_ollama(prompt)
-
-if __name__ == "__main__":
-    # If run directly, summarize recent transcripts
-    summarize_recent_transcripts()
