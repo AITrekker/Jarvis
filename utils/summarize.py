@@ -202,9 +202,6 @@ def save_summary(summary_text, source_transcripts):
     period_start = now.replace(minute=rollover_minute, second=0, microsecond=0)
     filename = f"summary_{period_start.isoformat().replace(':', '-')}.json"
     filepath = os.path.join(SUMMARY_DIR, filename)
-    
-    # Generate embedding for the summary
-    embedding = generate_embedding(summary_text)
 
     # Create a summary entry
     new_entry = {
