@@ -32,6 +32,38 @@ from config import (
     RAG_RELEVANCE_FACTOR
 )
 
+def get_embedding(text: str, model: str = OLLAMA_MODEL) -> List[float]:
+    """
+    Generate embeddings for a given text using the Ollama API.
+    
+    Args:
+        text: The text to generate embeddings for
+        model: The Ollama model to use for embedding
+        
+    Returns:
+        A list of floats representing the embedding, or an empty list on error.
+    """
+    try:
+        # Use the /api/embeddings endpoint
+        url = OLLAMA_URL.replace("/api/generate", "/api/embeddings")
+        
+        payload = {
+            "model": model,
+            "prompt": text
+        }
+        
+        response = requests.post(url, json=payload)
+        
+        if response.status_code == 200:
+            return response.json().get("embedding", [])
+        else:
+            logger.error(f"Ollama embedding API error: {response.status_code}, {response.text}")
+            return []
+            
+    except Exception as e:
+        logger.error(f"Exception when calling Ollama embedding API: {str(e)}")
+        return []
+
 def query_ollama(system_prompt, user_prompt, model=OLLAMA_MODEL, temperature=OLLAMA_TEMPERATURE, max_tokens=OLLAMA_MAX_TOKENS):
     """
     Query the Ollama API with RAG context.

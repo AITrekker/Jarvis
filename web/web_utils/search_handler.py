@@ -1,46 +1,52 @@
 """
 Search Handler Module
 
-This module provides the integration between the web interface and the search functionality,
-handling search requests and formatting responses for display.
+This module provides the logic for handling search queries from the web interface,
+coordinating with the search subsystem to retrieve and process results.
 
 Role in the system:
-- Processes search queries from the web interface
-- Calls the appropriate search functions from the search engine
-- Formats search results for web display
-- Handles error cases and edge conditions
-- Provides consistent search behavior across different web components
+- Receives search queries from the web UI
+- Calls the appropriate search functions from the search subsystem
+- Formats search results for display in the UI
+- Handles different search modes (e.g., semantic, keyword)
+- Integrates with the RAG model for enhanced responses
 
-Used by web components that need to perform searches, such as the Chat and Topic Explorer.
+Used by the chat component to provide contextually relevant information
+from past conversations to the language model.
 """
 
-import streamlit as st
-from utils.summarize import generate_embedding  
+import logging
 from search.search_engine import unified_search
-from config import SEARCH_DEFAULT_TOP_K
+from web.web_utils.session import session_state
+from search.ollama_helper import get_embedding
+from storage.chroma_store import get_all_summaries as get_all_conversations
+from storage.chroma_store import delete_summary_by_id as delete_conversation
 
-def search_conversations(query, top_k=SEARCH_DEFAULT_TOP_K):
-    """Search conversations using the query with RAG."""
+logger = logging.getLogger(__name__)
+
+def search_conversations(query, top_k=5, model=None):
+    """
+    Performs a unified search for conversations, using embeddings and optional RAG.
+    """
+    if not query:
+        return None
+    
+    model_to_use = model if model else session_state.ollama_model
+    if not model_to_use:
+        logger.warning("No Ollama model specified or found in session state for search.")
+        return {"success": False, "message": "No model selected"}
+        
+    embedding = get_embedding(query, model=model_to_use)
+    if not embedding:
+        return {"success": False, "message": "Failed to get embedding for query"}
+
     try:
-        # Generate embedding for the query
-        embedding = generate_embedding(query)
-        
-        # Use unified search function
-        return unified_search(
-            query=query, 
-            embedding=embedding, 
-            top_k=top_k, 
-            use_rag=True,
-            model=st.session_state.ollama_model
-        )
+        result = unified_search(query, embedding, top_k, use_rag=True, model=model_to_use)
+        return result
     except Exception as e:
-        st.error(f"Search error: {str(e)}")
-        return []
-        
-def highlight_keywords(text, keywords):
-    """Highlight keywords in text."""
-    highlighted = text
-    for keyword in keywords:
-        if len(keyword) > 3:  # Only highlight keywords longer than 3 chars
-            highlighted = highlighted.replace(keyword, f"<span class='highlight'>{keyword}</span>")
-    return highlighted
+        logger.error(f"Error during RAG search: {e}")
+        return None
+
+# By importing and aliasing from chroma_store, we no longer need the incorrect,
+# locally defined get_all_conversations and delete_conversation functions.
+# The timeline component will now call the correct backend functions directly. 

@@ -1,0 +1,31 @@
+{
+  "name": "get-forecast",
+  "description": "Returns the current weather forecast (temperature and conditions) for a given location.",
+  "version": "1.0.0",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "location": {
+        "type": "string",
+        "description": "Name of the city or location (e.g. 'Seattle, WA')."
+      }
+    },
+    "required": ["location"],
+    "additionalProperties": false
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "location": {
+        "type": "string",
+        "description": "Echoed input location."
+      },
+      "forecast": {
+        "type": "string",
+        "description": "Weather summary (e.g. 'Cloudy and 68°F in Seattle')."
+      }
+    },
+    "required": ["location", "forecast"],
+    "additionalProperties": false
+  }
+}

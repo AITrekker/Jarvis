@@ -1,0 +1,39 @@
+{
+  "name": "get-time",
+  "description": "Returns the current time (HH:MM:SS) and date (YYYY-MM-DD) for a given location.",
+  "version": "1.0.0",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "location": {
+        "type": "string",
+        "description": "Name of the city or location to look up (e.g. 'Seattle, WA')."
+      }
+    },
+    "required": ["location"],
+    "additionalProperties": false
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "location": {
+        "type": "string",
+        "description": "Echoed input location."
+      },
+      "time": {
+        "type": "string",
+        "description": "Current time in HH:MM:SS (24-hour) format."
+      },
+      "date": {
+        "type": "string",
+        "description": "Current date in YYYY-MM-DD format."
+      },
+      "timezone": {
+        "type": "string",
+        "description": "Time zone identifier (e.g. 'America/Los_Angeles')."
+      }
+    },
+    "required": ["location", "time", "date", "timezone"],
+    "additionalProperties": false
+  }
+}

@@ -110,7 +110,7 @@ def stop_transcription():
     # Wait for the thread to complete processing
     if _recording_thread:
         logger.info("Waiting for recording thread to finish...")
-        _recording_thread.join(timeout=10)  # Wait up to 10 seconds
+        _recording_thread.join(timeout=30)  # Wait up to 30 seconds
         
         # If thread is still alive after timeout, log warning but continue
         if _recording_thread.is_alive():

@@ -70,6 +70,8 @@ PLATFORM_CONFIGS = {
     "Windows": {
         "whisper_model": "base.en",
         "ollama_model": "gemma:2b"
+        #"whisper_model": "large-v3-turbo",
+        #"ollama_model": "mistral:instruct"
     },
     "Linux": {  # Default fallback
         "whisper_model": "tiny.en",

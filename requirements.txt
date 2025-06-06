@@ -7,7 +7,15 @@ transformers
 apscheduler
 chromadb
 pytest
-streamlit 
-pandas 
-plotly
 watchdog
+gradio
+
+# Data manipulation and plotting
+pandas
+plotly
+
+# Other dependencies can be added below
+requests
+flask
+flask_cors
+duckduckgo-search
