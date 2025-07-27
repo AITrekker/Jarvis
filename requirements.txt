@@ -1,7 +1,9 @@
 sounddevice
 numpy
 soundfile
-openai-whisper
+git+https://github.com/openai/whisper.git
+numba>=0.57
+llvmlite>=0.40
 torch
 transformers
 apscheduler
@@ -9,6 +11,7 @@ chromadb
 pytest
 watchdog
 gradio
+scipy
 
 # Data manipulation and plotting
 pandas

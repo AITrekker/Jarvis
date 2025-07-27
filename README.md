@@ -11,97 +11,85 @@
     ║                                                            ║
     ╚════════════════════════════════════════════════════════════╝
 
-# Jarvis - AI-Powered Voice Intelligence Platform
+# Jarvis - Your Personal AI Assistant
 
-Jarvis is an advanced voice intelligence system that transforms spoken conversations into searchable, actionable knowledge. By combining real-time transcription, AI-powered summarization, and semantic search capabilities, Jarvis creates a comprehensive memory system for all your important conversations.
+Jarvis is an advanced, locally-run AI assistant that transforms spoken conversations and text-based queries into a searchable, actionable knowledge base. By combining real-time transcription, a powerful tool-using framework, and a flexible web interface, Jarvis becomes your personal command center for information retrieval and task automation.
 
 ## Executive Summary
 
-Jarvis addresses the critical challenge of capturing and retrieving valuable information from verbal communications. By continuously listening, transcribing, summarizing, and indexing conversations, Jarvis ensures that no important detail is ever lost and that information can be retrieved using natural language queries.
+Jarvis addresses the critical challenge of capturing and retrieving valuable information from both verbal communications and external data sources. By continuously listening, transcribing, and summarizing conversations, and by providing a powerful tool integration for real-time information access (like web search), Jarvis ensures that no important detail is ever lost and that complex queries can be answered efficiently.
 
 ## Core Technology Stack
 
-- **Audio Processing**: Real-time audio capture and processing using platform-optimized libraries
-- **Speech Recognition**: High-accuracy transcription using OpenAI Whisper
-- **AI Summarization**: Local LLM-powered summarization using Ollama models (phi4)
-- **Vector Database**: ChromaDB for semantic search capabilities
-- **Embedding Generation**: Neural embeddings for context-aware search (nomic-embed-text)
-- **Web Interface**: Interactive UI built with Streamlit for intuitive user experience
+- **Audio Processing**: Real-time audio capture via PyAudio.
+- **Speech Recognition**: High-accuracy transcription using OpenAI Whisper.
+- **AI Models**: Local and private large language models (LLMs) served with Ollama.
+- **Vector Database**: ChromaDB for efficient semantic search over conversation transcripts.
+- **Embedding Generation**: `nomic-embed-text` for creating context-aware search embeddings.
+- **Web Interface**: Interactive UI built with Gradio, providing a modern chat experience.
+- **Tool Server**: A Model-Context-Protocol (MCP) compliant server built with Flask, enabling easy integration of new tools.
 
 ## Key Capabilities
 
-### Production-Ready Features
+- **Real-time Transcription**: Captures conversations with high accuracy.
+- **Intelligent Summarization**: Automatically generates concise summaries of your conversations.
+- **Semantic Search**: Understands the meaning behind your queries, not just keywords, allowing for natural language information retrieval from your conversation history.
+- **Tool Integration**: A flexible framework for adding new capabilities. Comes with pre-built tools for:
+    - **Web Search**: Find up-to-date information on any topic using DuckDuckGo.
+    - **Weather**: Get the current weather forecast for any location.
+    - **Time**: Get the current time for any location.
+- **Interactive Chat UI**: A modern web interface for chatting with Jarvis, searching transcripts, and viewing conversation history.
+- **Conversation Timeline**: Visualize your conversation history and manage individual entries.
+- **Model Selection**: Dynamically switch between different Ollama models through the UI.
+- **Cross-platform Compatibility**: Runs on Windows, macOS, and Linux.
 
-- **Real-time transcription**: Enterprise-grade speech-to-text using OpenAI Whisper, capturing conversations with high accuracy across various accents and technical terminology.
+## Technical Architecture
 
-- **Intelligent Summarization**: Automated generation of concise, contextual summaries at configurable intervals using locally-hosted LLM technology, ensuring data privacy and security.
+Jarvis employs a modular, microservice-inspired architecture:
 
-- **Semantic Search Engine**: Vector-based search technology that understands the meaning behind your queries, not just keywords, allowing for natural language information retrieval.
-
-- **Topic Explorer**: Interactive exploration of conversation themes with AI-enhanced analysis of related discussions across time periods.
-
-- **Cross-platform Compatibility**: Seamless operation across Windows, macOS, and Linux environments through platform-specific optimizations.
-
-- **Robust Data Management**: Structured storage of transcripts and summaries with comprehensive metadata for advanced filtering and retrieval.
-
-- **Enterprise Logging**: Detailed activity logs with configurable verbosity for system monitoring and compliance requirements.
-
-- **Automated Testing**: Comprehensive test suite ensuring reliability and stability of all core components.
-
-### Technical Architecture
-
-Jarvis employs a modular architecture with clear separation of concerns:
-
-- **Audio Capture Module**: Platform-optimized microphone streaming with configurable audio parameters
-- **Transcription Engine**: API integration with Whisper models for high-accuracy speech recognition
-- **Summarization Pipeline**: Temporal transcript aggregation and LLM-based summarization
-- **Vector Database**: ChromaDB integration for embedding storage and similarity search
-- **Web Dashboard**: Streamlit-based UI for intuitive interaction with the system
-- **Scheduled Processing**: Background task management for periodic summarization
-
-## Business Impact
-
-- **Knowledge Retention**: Capture critical information from meetings, presentations, and conversations
-- **Time Savings**: Quickly retrieve information without reviewing lengthy recordings or notes
-- **Enhanced Decision Making**: Access comprehensive conversation history to inform strategic decisions
-- **Improved Collaboration**: Share conversation insights across teams and departments
-- **Compliance Support**: Maintain searchable records of important discussions for regulatory purposes
-
-## Development Roadmap
-
-- **Speaker Identification**: Advanced diarization to distinguish between speakers in multi-person conversations
-- **Enhanced RAG Integration**: Deeper integration of retrieved context for more accurate question answering
-- **Enterprise Authentication**: SSO integration and role-based access control
-- **Cloud Deployment Options**: Scalable deployment configurations for AWS, Azure, and GCP
-- **Mobile Companion App**: Remote access to transcripts and summaries via mobile interfaces
-- **Integration APIs**: Connect with CRM, project management, and communication platforms
+-   **Main Application (`start_Jarvis.py`)**: The central entry point that can run the core listener or launch the web UI. It manages background processes for the other components.
+-   **Gradio Web UI (`web/`)**: Provides the complete user interface, including the chat, conversation timeline, and model selector. It communicates with the LLM handler and the MCP tool server.
+-   **MCP Tool Server (`mcp-server/`)**: A Flask-based server that exposes tools (like weather, time, and web search) over a simple HTTP API. It follows the Model-Context-Protocol, making it easy to add new tools.
+-   **LLM Handler (`web/web_utils/llm_handler.py`)**: Centralizes all calls to the Ollama API, streamlining interaction with the language models.
+-   **Tool Manager (`utils/tool_manager.py`)**: Discovers available tools and dynamically constructs the prompts needed for the LLM to decide which tool to use.
+-   **Search Handler (`web/web_utils/search_handler.py`)**: Manages semantic search and RAG (Retrieval-Augmented Generation) over the ChromaDB vector store.
+-   **Data Storage (`data/`)**: Contains the SQLite database for conversation metadata and the ChromaDB vector store for searchable transcript chunks.
 
 ## Technical Requirements
 
-- Python 3.11+
+- Python 3.11
 - FFmpeg for audio processing
-- Ollama with phi4 and nomic-embed-text models
-- ChromaDB for vector storage
-- 8GB+ RAM recommended for optimal performance
+- Ollama with your desired models (e.g., `phi3`, `llama3`) and the `nomic-embed-text` model for embeddings.
+- A C++ compiler (required by `ChromaDB`). On Windows, you'll need Microsoft C++ Build Tools.
+- 8GB+ RAM recommended for optimal performance.
 
 ## Getting Started
 
-1. Install Python 3.11 from the `binaries` folder
-2. Install Ollama from [https://ollama.com](https://ollama.com)
-3. Run the setup script: `python setup_Jarvis.py` (Note: This can take a significant amount of time, please be patient)
-4. Activate the virtual environment:
-   - On Windows: `venv\Scripts\activate`
-   - On macOS/Linux: `source venv/bin/activate`
-5. Launch the application:
-   - For command line interface: `python start_Jarvis.py`
-   - For web interface: `python start_Jarvis.py --mode ui`
+1.  **Clone the Repository**: `git clone https://github.com/AITrekker/Jarvis`
+2.  **Install Dependencies**:
+    - Ensure you have [Ollama](https://ollama.com) installed and have downloaded the models you wish to use (e.g., `ollama pull phi3`, `ollama pull nomic-embed-text`).
+    - Install FFmpeg for your operating system.
+    - Install the required Python packages:
+      ```bash
+      pip install -r requirements.txt
+      ```
+3.  **Run the Application**:
+    - The application now uses a Gradio web interface and can optionally run a background server for tools.
+    - To launch the full application with the UI and the MCP tool server, run:
+      ```bash
+      python start_Jarvis.py --mode ui --mcp
+      ```
+    - The UI will be available at `http://127.0.0.1:7860`.
 
 ## Project Structure
 
-- `storage/`: Data persistence layer with file and vector database handlers
-- `search/`: Semantic search engine with RAG capabilities
-- `utils/`: Core utilities including summarization and periodic task management  
-- `web/`: Interactive web interface components
-- `tests/`: Comprehensive test suite for all major components
-- `logs/`: System logs with configurable retention policies
-- `data/`: Storage for transcripts, summaries, and vector databases
+- `data/`: Stores transcripts, summaries, and the ChromaDB vector database.
+- `logs/`: Contains detailed system logs.
+- `mcp-server/`: The Model-Context-Protocol tool server.
+  - `tools/`: Individual tool packages, each with its own `tool.py` and `schema.json`.
+- `utils/`: Core utilities, including the `ToolManager`.
+- `web/`: The Gradio web interface.
+  - `components/`: Individual Gradio components (chat, timeline, etc.).
+  - `web_utils/`: Backend utilities for the web interface (search, LLM calls).
+- `start_Jarvis.py`: The main entry point for the application.
+- `requirements.txt`: The list of Python dependencies.
