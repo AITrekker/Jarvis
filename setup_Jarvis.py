@@ -71,7 +71,7 @@ def create_virtualenv():
     print("Installing dependencies...")
     print("This may take a few minutes. Please do not interrupt.")
     try:
-        subprocess.run([pip_executable, "install", "-r", "requirements.txt"], check=True)
+        subprocess.run(["uv", "pip", "install", "-r", "requirements.txt"], check=True)
     except subprocess.CalledProcessError as e:
         print(f"Dependency installation failed: {e}")
         sys.exit(1)
