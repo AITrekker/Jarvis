@@ -1,1 +1,0 @@
-# This file makes the search directory a proper Python package
