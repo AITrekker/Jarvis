@@ -1,0 +1,35 @@
+# Jarvis configuration. Env vars (JARVIS_*) override these values.
+# See PRD.md §5.
+
+[audio]
+source = "mic"               # mic | system | wav:<path>
+sample_rate = 16000
+channels = 1
+
+[whisper]
+model = "large-v3"
+device = "mps"               # mps | cuda | cpu
+compute_type = "float16"
+
+[diarization]
+hf_token_env = "HF_TOKEN"    # for pyannote model download
+
+[speaker_resolver]
+threshold_high = 0.75
+threshold_low = 0.55
+
+[db]
+url_env = "JARVIS_DB_URL"    # postgres://user:pass@host:5432/jarvis
+
+[ollama]
+host = "http://localhost:11434"
+summary_model = "qwen2.5:14b"
+query_parse_model = "qwen2.5:7b"
+agent_model = "qwen2.5:14b"
+
+[calendar]
+google_oauth_secret_path = "~/.config/jarvis/oauth.json"
+sync_window_days = 14
+
+[storage]
+audio_dir = "~/.local/share/jarvis/audio"

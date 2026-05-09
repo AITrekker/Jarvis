@@ -1,0 +1,72 @@
+[project]
+name = "jarvis"
+version = "0.1.0-dev"
+description = "Personal meeting recorder and searchable memory."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+authors = [{ name = "Amit Gupta" }]
+
+dependencies = [
+    "numpy>=1.26",
+    "pydantic>=2.7",
+    "tomli>=2.0; python_version < '3.11'",
+    "psycopg[binary]>=3.2",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "pgvector>=0.3",
+    "click>=8.1",
+    "structlog>=24.1",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+audio = [
+    "sounddevice>=0.4.7",
+    "soundfile>=0.12",
+    "silero-vad>=5.1",
+]
+ml = [
+    "whisperx>=3.1",
+    "pyannote.audio>=3.3",
+    "sentence-transformers>=3.0",
+    "torch>=2.2",
+]
+calendar = [
+    "google-api-python-client>=2.130",
+    "google-auth-oauthlib>=1.2",
+    "keyring>=25",
+]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "testcontainers[postgres]>=4.7",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+jarvis = "jarvis.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["jarvis"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["docs/v1-reference"]  # frozen v1 code, kept for reference only
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "integration: requires Postgres testcontainer (slow)",
+    "ml: requires Whisper/pyannote model download (very slow, nightly)",
+]

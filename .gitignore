@@ -1,48 +1,54 @@
-# Python cache files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
 *.egg-info/
-.installed.cfg
 *.egg
 
-# Virtual environment
+# Environments
+.venv/
 venv/
 ENV/
-.venv/
+.env
+.env.*
+!.env.example
 
-# IDE specific files
+# uv
+.python-version
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# Project specific
-data/transcripts/
-data/summaries/
-data/chroma/
+# OS
+.DS_Store
+
+# Project data — never commit recordings or local DB state
+data/
+audio/
 *.wav
 *.mp3
+*.flac
+*.m4a
 *.log
+logs/
 
-# Keep directory structure with .gitkeep
-!data/.gitkeep
-!data/transcripts/.gitkeep
-!data/summaries/.gitkeep
+# Allow committed test fixtures only
+!tests/fixtures/**/*.wav
+!tests/fixtures/**/*.mp3
 
-# macOS system files
-.DS_Store
+# Migration artifacts you don't want to commit
+*.sql.bak
