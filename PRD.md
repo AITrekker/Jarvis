@@ -78,7 +78,7 @@ Single *process*, not single *thread*. The pipeline has three stages with differ
 - **Pipeline (segment → transcribe → diarize → resolve → persist)** — synchronous, runs *after* `record` stops in v1. It's a batch job; "the CLI is busy for two minutes" is acceptable. No internal concurrency required.
 - **Summarizer** — fire-and-forget after `persist` commits. Runs in a background thread or subprocess; its failure or slowness must not roll back or block the recording write.
 - **Search** — independent CLI invocation. Talks only to Postgres. No shared state with capture or pipeline; safe to run while a recording is being processed.
-- **Calendar sync** — runs on a schedule (cron / `recorder calendar sync`), never inline with `record`. The orchestrator joins the recording to a calendar event after the fact during the pipeline stage.
+- **Calendar sync** — runs on a schedule (cron / `jarvis calendar sync`), never inline with `record`. The orchestrator joins the recording to a calendar event after the fact during the pipeline stage.
 
 Hang-risk checklist (must hold):
 - Capture thread does no DB I/O and no model inference
@@ -443,12 +443,12 @@ class AgentResponse:
 
 **Commands:**
 ```
-recorder record --source {mic|system|wav:<path>} [--event-id <id>]
-recorder process <session_uuid>          # re-run pipeline on stored audio
-recorder search "<query>"
-recorder enroll <session_uuid> <speaker_raw> <person_name>
-recorder calendar sync
-recorder people list | add | remove
+jarvis record --source {mic|system|wav:<path>} [--event-id <id>]
+jarvis process <session_uuid>          # re-run pipeline on stored audio
+jarvis search "<query>"
+jarvis enroll <session_uuid> <speaker_raw> <person_name>
+jarvis calendar sync
+jarvis people list | add | remove
 ```
 
 **Acceptance:** Each command is independently testable; `record` + `process` + `search` covers the end-to-end happy path.
@@ -546,7 +546,7 @@ CREATE INDEX ON chunks (recording_id);
 
 ## 5. Configuration
 
-Single `config.toml` at project root. Env-var overrides (`RECORDER_*`).
+Single `config.toml` at project root. Env-var overrides (`JARVIS_*`).
 
 ```toml
 [audio]
@@ -566,7 +566,7 @@ threshold_high = 0.75
 threshold_low = 0.55
 
 [db]
-url_env = "RECORDER_DB_URL"  # postgres://...
+url_env = "JARVIS_DB_URL"  # postgres://...
 
 [ollama]
 host = "http://localhost:11434"
@@ -574,7 +574,7 @@ summary_model = "qwen2.5:14b"
 query_parse_model = "qwen2.5:7b"
 
 [calendar]
-google_oauth_secret_path = "~/.config/recorder/oauth.json"
+google_oauth_secret_path = "~/.config/jarvis/oauth.json"
 sync_window_days = 14
 ```
 
@@ -633,7 +633,7 @@ Modules are arranged so multiple agents can work in parallel. **Phase boundaries
 ### Phase 6 — sub-agents + orchestration (1 agent)
 - Sub-agent for meeting summarization (replaces direct `summarizer` call from Phase 3)
 - `cli` wiring all commands; end-to-end docs
-- **Gate:** Fresh-clone → `make setup && recorder record --source wav:fixtures/four_speaker.wav && recorder chat "..."` works end-to-end
+- **Gate:** Fresh-clone → `make setup && jarvis record --source wav:fixtures/four_speaker.wav && jarvis chat "..."` works end-to-end
 
 ### Cross-phase rules for agents
 - Implement against the interface in §3 first; do not change interfaces without updating this PRD
