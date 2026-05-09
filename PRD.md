@@ -102,6 +102,47 @@ The system has four distinct layers with different programming models. Conflatin
 - The conversational layer is **one primary agent** in v1, plus tools, plus on-demand sub-agents.
 - Multi-agent decomposition (specialists with an orchestrator) is **explicitly out of scope for v1**. Revisit only if a concrete need surfaces — premature decomposition wastes time on inter-agent protocol design.
 
+### 2.3 User-facing surfaces
+
+Jarvis exposes the same backend through three surfaces with different jobs. **We do not build a bespoke chat UI.** In 2026 the chat surface is the LLM host (Claude Desktop, Cursor, ChatGPT Desktop) — rebuilding it loses to what those apps already ship.
+
+| Surface | Purpose | Built in phase |
+|---|---|---|
+| **CLI** (`jarvis ...`) | Dev loop, scripting, cron jobs, headless servers. Every other surface is a thin adapter over the same Python functions the CLI calls. | 0 → ongoing |
+| **MCP server** (`jarvis mcp serve`) | Production query path. Users point Claude Desktop / Cursor / ChatGPT Desktop at it and query their meeting memory from the chat app they already use. Stdio transport (local-only); remote MCP / HTTP is out of scope for v1. | 4 |
+| **Tray app** (`jarvis tray`) | Recording-control surface only. Runs as a separate process from the recorder; provides a visible 🔴 in the OS menu bar / system tray with a one-click stop. Cross-platform via `pystray`. **Not** a UI for search or chat. | 1 (basic) → 2 (polish) |
+
+**Architecture:**
+```
+        ┌─── jarvis.cli (Click) ────────┐
+        │                                │
+        ├─── jarvis.mcp_server (MCP) ──┐ │
+core ◄──┤                                │
+        ├─── jarvis.tray (pystray) ────┐ │
+        │                                │
+        └─── (future: jarvis.http) ────┘ │
+                                          ▼
+                              jarvis.tools registry
+                              jarvis.search / calendar / persister / ...
+```
+
+**Rules:**
+- All three surfaces are **adapters**, not implementations. Business logic lives in modules under `jarvis/` and the `tools` registry. A surface adds zero behavior the CLI doesn't already have.
+- The tray app talks to the recorder via OS-level signals (SIGTERM on Unix, `taskkill` on Windows) and a pidfile in `~/.local/share/jarvis/run/recorder.pid`. It does not embed Python recorder logic.
+- HTTP / FastAPI is not in v1. Add it the day a custom non-chat UI (timeline, enrollment wizard, needs-review queue) is justified — not before.
+
+### 2.4 LLM runtime
+
+**Default: Ollama**, daemon at `http://localhost:11434`. Same install on macOS, Windows, Linux; OpenAI-compatible API; native tool-calling on `qwen2.5` / `llama3.x`. The `jarvis setup` command verifies Ollama is on `PATH`, the daemon is reachable, and required models are pulled (pulls them if missing).
+
+**Pluggable.** All LLM calls go through a single `LLMClient` over the OpenAI-compatible HTTP shape, so any runtime that speaks it (LM Studio, llama.cpp `server`, vLLM, even a remote API) is a config change in `[ollama] host`, not a code change.
+
+**RAM-aware defaults.** `qwen2.5:14b` is ~10–14 GB resident at runtime; on a 16 GB machine it will swap when Whisper + pyannote are also loaded. Setup detects RAM and picks:
+- ≤16 GB → `qwen2.5:7b` for everything; summarization runs serially after persist commits
+- ≥32 GB → `qwen2.5:14b` for agent + summarizer, `qwen2.5:7b` for query parsing, summarization fire-and-forget per §2.1
+
+Summarization being fire-and-forget after persist is what makes the small-RAM mode safe — the recording write is never blocked by a model that doesn't fit.
+
 ---
 
 ## 3. Module specifications
@@ -444,14 +485,87 @@ class AgentResponse:
 **Commands:**
 ```
 jarvis record --source {mic|system|wav:<path>} [--event-id <id>]
+jarvis stop                            # signals an in-progress `record` to finalize
 jarvis process <session_uuid>          # re-run pipeline on stored audio
 jarvis search "<query>"
+jarvis chat                            # interactive REPL against the primary agent (dev)
 jarvis enroll <session_uuid> <speaker_raw> <person_name>
 jarvis calendar sync
 jarvis people list | add | remove
+jarvis tray                            # launch the menu-bar / system-tray app
+jarvis mcp serve                       # MCP server over stdio (for Claude Desktop etc.)
+jarvis mcp print-config                # emit a host-config snippet to paste into the chat host
+jarvis setup                           # check Ollama, models, Postgres, mic perms; pull what's missing
 ```
 
 **Acceptance:** Each command is independently testable; `record` + `process` + `search` covers the end-to-end happy path.
+
+---
+
+### 3.12 `mcp_server` — MCP adapter for chat hosts
+
+**Purpose:** Expose the tool registry (§3.9) over MCP so Claude Desktop / Cursor / ChatGPT Desktop can call Jarvis tools as part of a conversation. This is the *primary* end-user surface for queries; the CLI `jarvis chat` is for dev only.
+
+**Implementation:** Thin wrapper over the `mcp` Python SDK. Subscribes to the existing `tools` registry; every registered tool becomes an MCP tool with the same name, description, and JSON schema. No business logic lives here.
+
+**Transport:** Stdio (the host launches `jarvis mcp serve` as a subprocess). Remote MCP / HTTP transport is out of scope for v1 — Jarvis is a local tool; tunneling its mic and DB to a public endpoint defeats the design.
+
+**Configuration in the host:** the user adds an entry like
+```json
+{
+  "mcpServers": {
+    "jarvis": { "command": "jarvis", "args": ["mcp", "serve"] }
+  }
+}
+```
+to their host's MCP config. Jarvis ships a `jarvis mcp print-config` command that emits this snippet.
+
+**Acceptance:**
+- Every tool in the registry appears in the MCP host's tool list with its description and schema
+- Calling a tool from the host produces the same result as calling it via the CLI
+- Tool errors propagate as MCP errors, not as crashes of the server process
+- `jarvis mcp serve` runs cleanly under stdio without spurious stdout writes (logs go to stderr or a file — stdout is reserved for the MCP protocol)
+
+---
+
+### 3.13 `tray` — recording-control surface
+
+**Purpose:** Give the user a visible, always-accessible way to start/stop a recording without touching the terminal. Especially: a one-click emergency stop while a meeting is in progress.
+
+**Scope (v1):**
+- Menu-bar / system-tray icon, color-coded by state (idle = grey, recording = 🔴)
+- Menu items: *Start recording*, *Stop recording*, *Open last transcript*, *Quit*
+- Cross-platform: macOS, Windows, Linux (single codebase via `pystray` + `Pillow`)
+- Talks to the recorder via pidfile + signal — no embedded recorder logic
+
+**Out of scope (v1):**
+- Floating overlay windows
+- Global keyboard shortcuts (defer; messy across OSes)
+- Any search / chat / transcript-browsing UI — that's the chat host's job
+
+**Process model:**
+```
+[jarvis tray]  ──reads──►  ~/.local/share/jarvis/run/recorder.pid
+       │                         ▲
+       │  on "Start"             │ written by `jarvis record` on startup
+       │  spawns `jarvis record` │
+       ▼                         │
+[jarvis record subprocess] ──────┘
+       │  on "Stop"
+       │  receives SIGTERM (Unix) / taskkill (Win)
+       ▼
+   pipeline finalizes, persists, exits
+```
+
+The tray and the recorder are intentionally separate processes so the tray stays responsive even when the recorder is mid-pipeline (Whisper, pyannote, persist) at shutdown.
+
+**Permissions:** First run on macOS triggers Accessibility + Microphone prompts. `jarvis setup` verifies these and points the user at *System Settings → Privacy & Security* if they're missing.
+
+**Acceptance:**
+- Icon appears in tray on launch; reflects recorder state within 1s of state change
+- Clicking *Stop recording* during a recording results in a clean transcript persisted within 30s
+- Force-quitting the tray app does **not** kill an in-progress recording (the recorder is its own process)
+- Force-killing the recorder while the tray is running results in the tray icon returning to idle within 5s (pidfile staleness check)
 
 ---
 
@@ -610,7 +724,8 @@ Modules are arranged so multiple agents can work in parallel. **Phase boundaries
 ### Phase 1 — capture + transcribe (2 agents in parallel)
 - **Agent A:** `audio_source` (all three implementations) + `segmenter`
 - **Agent B:** `transcriber` (WhisperX wrapper, no diarization yet — single-speaker mode)
-- **Gate:** WAV → transcript with word timestamps, no speakers, persisted as `turns` rows with `speaker_raw="SPEAKER_00"`
+- Also in this phase: minimal `tray` (icon + Start/Stop only) and `jarvis stop` CLI command, so the recorder can be controlled without the terminal from day one
+- **Gate:** WAV → transcript with word timestamps, no speakers, persisted as `turns` rows with `speaker_raw="SPEAKER_00"`. Tray's *Stop recording* yields the same persisted result as `jarvis stop`.
 
 ### Phase 2 — speakers + calendar (2 agents in parallel)
 - **Agent C:** Add diarization to `transcriber`; build `speaker_resolver` + enrollment CLI
@@ -621,19 +736,23 @@ Modules are arranged so multiple agents can work in parallel. **Phase boundaries
 - `summarizer` + `search` (hybrid query, no agent yet — direct CLI)
 - **Gate:** *"what did I say to <name> last week"* on seeded data returns correct results via direct hybrid search (no LLM planner)
 
-### Phase 4 — tool registry + primary agent (1 agent)
+### Phase 4 — tool registry + primary agent + MCP server (1 agent)
 - `tools` registry with `local_search`, `calendar_query`, `enroll_speaker_lookup`
 - `agent` primary planner/reasoner with conversation state, query decomposition, self-correction, citations
-- **Gate:** Compound query that requires two local tool calls produces a correct answer with a visible tool trace and citations
+- `mcp_server` exposing the registry over stdio (§3.12); `jarvis mcp serve` and `jarvis mcp print-config` commands
+- **Gate (CLI):** Compound query via `jarvis chat` that requires two local tool calls produces a correct answer with a visible tool trace and citations
+- **Gate (MCP):** With Jarvis registered as an MCP server in Claude Desktop (or Cursor), the same compound query asked in the host produces a correct answer using Jarvis tools, with tool call results visible in the host's UI
 
 ### Phase 5 — MCP integrations (1 agent)
 - `slack_search` and `gmail_search` MCP tools, registered with the agent
 - **Gate:** Cross-source query *"what's blocking project X across last week's meetings and Slack"* returns synthesized answer with citations from both Postgres and Slack MCP
 
-### Phase 6 — sub-agents + orchestration (1 agent)
+### Phase 6 — sub-agents, tray polish, setup (1 agent)
 - Sub-agent for meeting summarization (replaces direct `summarizer` call from Phase 3)
-- `cli` wiring all commands; end-to-end docs
-- **Gate:** Fresh-clone → `make setup && jarvis record --source wav:fixtures/four_speaker.wav && jarvis chat "..."` works end-to-end
+- Tray polish: state polling, *Open last transcript*, recovery from stale pidfile, Windows tray-visibility documentation
+- `jarvis setup` health check: Ollama daemon, models, Postgres reachability, mic + accessibility permissions on macOS
+- End-to-end docs covering: install, `jarvis setup`, register the MCP server in Claude Desktop, run a recording from the tray, query from the host
+- **Gate:** Fresh-clone → `make setup && jarvis setup && jarvis record --source wav:fixtures/four_speaker.wav` succeeds; querying the result from a registered chat host (Claude Desktop) returns the expected answer with citations
 
 ### Cross-phase rules for agents
 - Implement against the interface in §3 first; do not change interfaces without updating this PRD
@@ -655,7 +774,8 @@ Modules are arranged so multiple agents can work in parallel. **Phase boundaries
 ## 9. Out of scope explicitly
 
 - Real-time/streaming transcription
-- Web UI (CLI only in v1)
+- **Bespoke chat UI** (web or desktop) — the chat surface is the LLM host (Claude Desktop, Cursor, ChatGPT Desktop) via MCP; Jarvis ships only CLI, MCP server, and a recording-control tray
+- HTTP / FastAPI server and remote MCP transport — local stdio only
 - Multi-device sync
 - Encryption at rest beyond filesystem defaults
 - Sharing / export beyond raw SQL access
