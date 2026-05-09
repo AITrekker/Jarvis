@@ -6,15 +6,19 @@ thin wrapper around a module function — no business logic here.
 
 from __future__ import annotations
 
+import logging
+
 import click
 
-from . import __version__
+from . import __version__, _logging
 
 
 @click.group()
 @click.version_option(__version__)
-def main() -> None:
+@click.option("--debug", is_flag=True, help="Verbose logging.")
+def main(debug: bool) -> None:
     """Jarvis: personal meeting recorder & searchable memory."""
+    _logging.configure(level=logging.DEBUG if debug else logging.INFO)
 
 
 @main.command()
