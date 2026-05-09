@@ -1,18 +1,22 @@
-.PHONY: help setup sync lint test test.unit test.integration db.up db.down db.psql migrate migrate.new
+.PHONY: help setup sync lint fmt test test.unit test.integration smoke db.up db.down db.psql migrate
+
+# This Makefile is a thin convenience shim for Mac/Linux. On Windows, run nox
+# directly: `uv run nox -s lint`, etc. See noxfile.py for the canonical task list.
 
 help:
-	@echo "Targets:"
+	@echo "Targets (Mac/Linux convenience; Windows: 'uv run nox -s <task>'):"
 	@echo "  setup           - install uv-managed venv with dev + audio extras"
 	@echo "  sync            - re-sync deps from pyproject.toml"
 	@echo "  lint            - ruff check + format check"
-	@echo "  test            - pytest (unit + integration)"
-	@echo "  test.unit       - unit tests only"
-	@echo "  test.integration- integration tests (requires docker)"
+	@echo "  fmt             - ruff fix + format"
+	@echo "  test.unit       - unit tests only (no Docker)"
+	@echo "  test.integration- integration tests (requires Docker)"
+	@echo "  test            - unit + integration"
+	@echo "  smoke           - CLI smoke check"
 	@echo "  db.up           - start local Postgres + pgvector via docker compose"
 	@echo "  db.down         - stop local Postgres"
 	@echo "  db.psql         - open psql against local Postgres"
-	@echo "  migrate         - run alembic upgrade head"
-	@echo "  migrate.new name=<desc> - create a new migration"
+	@echo "  migrate         - apply migrations/0001_init.sql"
 
 setup:
 	uv sync --extra dev --extra audio
@@ -21,16 +25,22 @@ sync:
 	uv sync
 
 lint:
-	uv run ruff check .
-	uv run ruff format --check .
+	uv run nox -s lint
 
-test: test.unit test.integration
+fmt:
+	uv run nox -s fmt
+
+test:
+	uv run nox -s test
 
 test.unit:
-	uv run pytest -m "not integration and not ml"
+	uv run nox -s test_unit
 
 test.integration:
-	uv run pytest -m integration
+	uv run nox -s test_integration
+
+smoke:
+	uv run nox -s smoke
 
 db.up:
 	docker compose up -d db
@@ -42,8 +52,5 @@ db.psql:
 	docker compose exec db psql -U jarvis -d jarvis
 
 migrate:
-	uv run alembic upgrade head
-
-migrate.new:
-	@test -n "$(name)" || (echo "usage: make migrate.new name=<description>" && exit 1)
-	uv run alembic revision -m "$(name)"
+	@test -n "$$JARVIS_DB_URL" || (echo "set JARVIS_DB_URL first" && exit 1)
+	uv run psql "$$JARVIS_DB_URL" -f migrations/0001_init.sql

@@ -28,8 +28,15 @@ query_parse_model = "qwen2.5:7b"
 agent_model = "qwen2.5:14b"
 
 [calendar]
-google_oauth_secret_path = "~/.config/jarvis/oauth.json"
+# Optional. If unset, defaults to the per-OS config dir + "oauth.json".
+# Override here only if you keep the secret somewhere else.
+# google_oauth_secret_path = "~/path/to/oauth.json"
 sync_window_days = 14
 
 [storage]
-audio_dir = "~/.local/share/jarvis/audio"
+# Optional. If unset, defaults to the per-OS data dir + "audio/".
+#   macOS:   ~/Library/Application Support/jarvis/audio
+#   Linux:   $XDG_DATA_HOME/jarvis/audio (or ~/.local/share/jarvis/audio)
+#   Windows: %LOCALAPPDATA%/jarvis/audio
+# Override here to point at an external drive, etc.
+# audio_dir = "/Volumes/Recordings/jarvis"

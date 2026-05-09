@@ -37,23 +37,74 @@ A single Python process. Audio is captured by a configurable source (mic, system
 
 ## Getting started
 
+Jarvis runs identically on macOS and Windows (and Linux). The Python code is portable; only the install commands differ. CI exercises `ubuntu-latest`, `macos-latest`, and `windows-latest` on every push.
+
+### Prerequisites (both OSes)
+
+- **Python 3.12** — `uv` will install it for you if missing
+- **`uv`** — `curl -LsSf https://astral.sh/uv/install.sh | sh` (macOS/Linux) or `winget install astral-sh.uv` (Windows)
+- **Postgres 16 + pgvector** — pick one path below
+- **Ollama** — `brew install ollama` (Mac) or download from [ollama.com](https://ollama.com) (Windows)
+- **ffmpeg** — `brew install ffmpeg` (Mac) or `winget install ffmpeg` (Windows)
+
+### Postgres — pick one
+
+| Path | Mac | Windows | Notes |
+|---|---|---|---|
+| **Docker Desktop** | ✓ | ✓ | One command on both: `make db.up` (or `docker compose up -d db`). Best if you already have Docker. |
+| **Postgres.app** | ✓ | ✗ | Click installer, ships with pgvector, no daemon to babysit. Best on Mac if you don't want Docker. |
+| **EDB installer** | ✓ | ✓ | [enterprisedb.com/downloads](https://www.enterprisedb.com/downloads). Add pgvector via Stack Builder. Best on Windows if you don't want Docker. |
+| **brew** | ✓ | ✗ | `brew install postgresql@16 pgvector && brew services start postgresql@16` |
+
+After install, in any path:
 ```bash
-# requirements: uv, ffmpeg, Postgres 16 with pgvector, Ollama
-uv sync
-make db.up        # boots local Postgres + pgvector via docker
-make migrate
-jarvis --help
+createdb jarvis
+psql jarvis -c "CREATE EXTENSION vector; CREATE EXTENSION pg_trgm;"
+psql jarvis -f migrations/0001_init.sql
+export JARVIS_DB_URL="postgresql://$USER@localhost:5432/jarvis"   # adjust per your install
 ```
 
-Detailed setup will land as Phase 0 completes.
+### Setup + smoke check
+
+**macOS / Linux:**
+```bash
+git clone https://github.com/AITrekker/Jarvis && cd Jarvis
+uv sync --extra dev
+uv run jarvis --help
+make test.unit
+```
+
+**Windows (PowerShell or Git Bash):**
+```powershell
+git clone https://github.com/AITrekker/Jarvis
+cd Jarvis
+uv sync --extra dev
+uv run jarvis --help
+uv run nox -s test_unit
+```
+
+Windows note: `make` is not installed by default. Use `uv run nox -s <task>` directly, or install `winget install GnuWin32.Make` to use the Makefile shim. The `noxfile.py` is the canonical task list — see `uv run nox --list`.
 
 ## Development
 
-```bash
-make test         # unit + integration (testcontainers Postgres)
-make lint
-make migrate.new name=<short-description>
-```
+Tasks (run on either OS via `uv run nox -s <name>`):
+
+| Task | What it does |
+|---|---|
+| `lint` | ruff check + format check |
+| `fmt` | ruff fix + format |
+| `test_unit` | unit tests, no Docker needed |
+| `test_integration` | integration tests, requires Docker (testcontainers spins up its own pgvector) |
+| `test` | unit + integration |
+| `smoke` | CLI smoke check |
+
+Mac/Linux convenience: `make lint` / `make test.unit` / etc. delegate to nox.
+
+## Running on both Mac and Windows
+
+The recording pipeline (microphone, Whisper, pyannote) is the part with the most platform-specific friction — first-time install of `whisperx` + CUDA wheels on Windows, BlackHole vs WASAPI loopback for system audio. Designate one machine as your **recording host** and put the heavy ML extras (`uv sync --extra ml --extra audio`) there. Any other machine can be a **query host** with just `uv sync --extra dev` and a connection string pointed at the same Postgres — the single-store design means search, agent, and MCP server work from anywhere with DB access.
+
+User memory (recordings, transcripts) is **not** designed to be portable across stacks. Code and instances are.
 
 ## Documentation
 

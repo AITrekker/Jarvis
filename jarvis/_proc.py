@@ -18,25 +18,11 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-
-def runtime_dir() -> Path:
-    """Per-user runtime directory. Follows OS conventions.
-
-    - Linux: $XDG_RUNTIME_DIR or ~/.local/share/jarvis/run
-    - macOS: ~/Library/Application Support/jarvis/run
-    - Windows: %LOCALAPPDATA%\\jarvis\\run
-    """
-    if sys.platform == "win32":
-        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~\\AppData\\Local")
-        return Path(base) / "jarvis" / "run"
-    if sys.platform == "darwin":
-        return Path(os.path.expanduser("~/Library/Application Support/jarvis/run"))
-    base = os.environ.get("XDG_RUNTIME_DIR") or os.path.expanduser("~/.local/share/jarvis/run")
-    return Path(base)
+from . import _paths
 
 
 def default_pidfile() -> Path:
-    return runtime_dir() / "recorder.pid"
+    return _paths.runtime_dir() / "recorder.pid"
 
 
 def write_pidfile(path: Path | None = None) -> Path:
