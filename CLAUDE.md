@@ -44,7 +44,28 @@ These are not preferences. Each maps to a v1 failure or to a 2026 architectural 
 
 ## Build phases — see PRD §7
 
-We are in Phase 0 → starting Phase 1. Do not start Phase N+1 until Phase N's gate is met.
+**Current state: Phase 0 complete on the owner's Mac. Ready to start Phase 1.**
+
+Phase 0 finished with everything green on the owner's machine via `./bootstrap.sh`:
+- toolchain (Python 3.12, uv, ffmpeg, psql) installed
+- Postgres.app running, `jarvis` DB created with pgvector + pg_trgm + 7-table schema
+- Ollama daemon running with `qwen2.5` pulled (other models like `gpt-oss` may also be present from prior installs — Jarvis only relies on what's listed in `config.toml`)
+- 21 unit tests passing
+
+The only intentional ✗ is `HF_TOKEN` — only required when Phase 2 wires pyannote diarization.
+
+Do not start Phase N+1 until Phase N's gate is met.
+
+### Next: Phase 1 (per PRD §7)
+
+Two parallel work streams plus a minimal control surface:
+- **Agent A:** `audio_source` (WavFileSource + MicSource + SystemAudioSource) + `segmenter` (Silero VAD)
+- **Agent B:** `transcriber` — WhisperX wrapper, single-speaker mode (no diarization yet)
+- **Plus:** minimal `jarvis tray` icon + `jarvis stop` command, so recording is controllable without the terminal from day one
+
+**Gate:** WAV in → `turns` rows in Postgres with `speaker_raw="SPEAKER_00"`. Tray's *Stop recording* yields the same persisted result as `jarvis stop`.
+
+The cross-platform helpers Phase 1 will build on are already in place: `jarvis/_proc.py` (pidfile + ManagedProcess + cross-platform stop), `jarvis/_progress.py` (TTY-aware spinner for slow Whisper imports), `jarvis/_paths.py` (per-OS data/config/runtime dirs), `jarvis/_logging.py` (handler reset + Windows UTF-8 + httpx silenced).
 
 ## Decisions made in conversation that aren't in the PRD
 
@@ -56,6 +77,8 @@ If you're a future Claude session and one of these contradicts the PRD, the PRD 
 - **Tray uses `pystray`** specifically because it works on Mac, Windows, and Linux from one codebase. `rumps` is rejected (Mac-only).
 - **MCP server is stdio-only in v1.** Remote MCP / HTTP transport is out of scope; Jarvis is a local tool, tunneling its mic and DB to a public endpoint defeats the design.
 - **Memory of past conversations:** Claude Code's `~/.claude/.../memory/` cache is local to one machine. Durable memory lives here in `CLAUDE.md`, in `PRD.md`, and in commit messages. Do not rely on the local cache for anything load-bearing.
+- **`jarvis setup` was pulled forward from Phase 6 to Phase 0** because the manual install path was friction enough to justify it. The bootstrap scripts (`bootstrap.sh`, `bootstrap.ps1`) are the recommended entry point for a fresh clone on either OS.
+- **Ollama install on Mac uses the cask** (`brew install --cask ollama`), not the formula. The cask installs the menu-bar app which auto-starts the daemon; the formula installs only the CLI and forces the user to keep `ollama serve` running manually.
 
 ## Things that have already been tried and rejected
 

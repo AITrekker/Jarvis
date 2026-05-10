@@ -34,3 +34,8 @@ def configure(level: int = logging.INFO, log_file: Path | None = None) -> None:
         handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
 
     logging.basicConfig(level=level, format=fmt, handlers=handlers, force=True)
+
+    # Quiet third-party loggers that are too chatty at INFO. Each request would
+    # otherwise dump a line like "HTTP Request: GET ... 200 OK" into user output.
+    for noisy in ("httpx", "httpcore", "urllib3"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
