@@ -216,7 +216,11 @@ def check_db_schema(url: str | None, *, skip: bool = False) -> Check:
 def check_ollama() -> Check:
     p = _which("ollama")
     if IS_MAC:
-        fix, fixers = "brew install ollama", [lambda: _brew_install("ollama")]
+        # Cask installs the menu-bar app (which boots the daemon on launch).
+        # The plain `brew install ollama` formula gives you only the CLI, which
+        # means you have to run `ollama serve` in a separate terminal forever.
+        fix = "brew install --cask ollama"
+        fixers = [lambda: _brew_install_cask("ollama")]
     elif IS_WIN:
         fix, fixers = "winget install Ollama.Ollama", [lambda: _winget_install("Ollama.Ollama")]
     else:
@@ -285,6 +289,14 @@ def _brew_install(pkg: str) -> bool:
     return _run(["brew", "install", pkg]).returncode == 0
 
 
+def _brew_install_cask(pkg: str) -> bool:
+    if not _which("brew"):
+        click.echo(f"  brew not installed; cannot auto-install --cask {pkg}", err=True)
+        return False
+    click.echo(f"  brew install --cask {pkg}...")
+    return _run(["brew", "install", "--cask", pkg]).returncode == 0
+
+
 def _winget_install(pkg_id: str) -> bool:
     if not _which("winget"):
         click.echo(f"  winget not installed; cannot auto-install {pkg_id}", err=True)
@@ -333,14 +345,30 @@ def _start_postgres_app() -> bool:
 
 
 def _start_ollama() -> bool:
-    """Open the Ollama app on macOS, which spawns the daemon."""
+    """Start the Ollama daemon. Tries the menu-bar app first, then `ollama serve`."""
     if not IS_MAC:
         return False
     click.echo("  starting Ollama...")
-    _run(["open", "-a", "Ollama"])
+    # Try the cask app first; if not installed, fall back to spawning the CLI.
+    app_started = _run(["open", "-a", "Ollama"]).returncode == 0
+    if not app_started:
+        if not _which("ollama"):
+            return False
+        click.echo("  Ollama app not found; spawning `ollama serve` in the background...")
+        # Fully detach so it survives this Python process exiting.
+        log_path = _paths_runtime_dir() / "ollama.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("ab") as logf:
+            subprocess.Popen(
+                ["ollama", "serve"],
+                stdout=logf,
+                stderr=logf,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True,
+            )
     import time
 
-    for _ in range(10):
+    for _ in range(20):  # up to 10s — daemon cold-start can be slow
         time.sleep(0.5)
         try:
             import httpx
@@ -350,6 +378,12 @@ def _start_ollama() -> bool:
         except Exception:
             continue
     return False
+
+
+def _paths_runtime_dir() -> Path:
+    from . import _paths
+
+    return _paths.runtime_dir()
 
 
 def _ensure_db(url: str) -> bool:
