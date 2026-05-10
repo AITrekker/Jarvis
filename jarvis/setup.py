@@ -81,32 +81,24 @@ def check_uv() -> Check:
 
 def check_ffmpeg() -> Check:
     p = _which("ffmpeg")
-    fix = (
-        "brew install ffmpeg"
-        if IS_MAC
-        else ("winget install ffmpeg" if IS_WIN else "apt install ffmpeg")
-    )
-    return Check(
-        "ffmpeg",
-        p is not None,
-        p or "not found",
-        fix_hint=fix,
-        fixers=[lambda: _brew_install("ffmpeg")] if IS_MAC else [],
-    )
+    if IS_MAC:
+        fix, fixers = "brew install ffmpeg", [lambda: _brew_install("ffmpeg")]
+    elif IS_WIN:
+        fix, fixers = "winget install Gyan.FFmpeg", [lambda: _winget_install("Gyan.FFmpeg")]
+    else:
+        fix, fixers = "apt install ffmpeg", []
+    return Check("ffmpeg", p is not None, p or "not found", fix_hint=fix, fixers=fixers)
 
 
 def check_psql() -> Check:
     p = _which("psql")
-    return Check(
-        "psql client",
-        p is not None,
-        p or "not found",
-        fix_hint=(
-            "install Postgres.app from https://postgresapp.com (recommended)"
-            if IS_MAC
-            else "https://www.postgresql.org/download/"
-        ),
-    )
+    if IS_MAC:
+        hint = "install Postgres.app from https://postgresapp.com (recommended)"
+    elif IS_WIN:
+        hint = "winget install PostgreSQL.PostgreSQL.16  (then install pgvector via Stack Builder)"
+    else:
+        hint = "apt install postgresql-16 postgresql-16-pgvector"
+    return Check("psql client", p is not None, p or "not found", fix_hint=hint)
 
 
 # ---- Database checks -----------------------------------------------------
@@ -200,14 +192,13 @@ def check_db_schema(url: str | None) -> Check:
 
 def check_ollama() -> Check:
     p = _which("ollama")
-    fix = "brew install ollama" if IS_MAC else "https://ollama.com/download"
-    return Check(
-        "Ollama installed",
-        p is not None,
-        p or "not found",
-        fix_hint=fix,
-        fixers=[lambda: _brew_install("ollama")] if IS_MAC else [],
-    )
+    if IS_MAC:
+        fix, fixers = "brew install ollama", [lambda: _brew_install("ollama")]
+    elif IS_WIN:
+        fix, fixers = "winget install Ollama.Ollama", [lambda: _winget_install("Ollama.Ollama")]
+    else:
+        fix, fixers = "https://ollama.com/download", []
+    return Check("Ollama installed", p is not None, p or "not found", fix_hint=fix, fixers=fixers)
 
 
 def check_ollama_daemon(host: str = "http://localhost:11434") -> Check:
@@ -260,6 +251,27 @@ def _brew_install(pkg: str) -> bool:
         return False
     click.echo(f"  brew install {pkg}...")
     return _run(["brew", "install", pkg]).returncode == 0
+
+
+def _winget_install(pkg_id: str) -> bool:
+    if not _which("winget"):
+        click.echo(f"  winget not installed; cannot auto-install {pkg_id}", err=True)
+        return False
+    click.echo(f"  winget install {pkg_id}...")
+    return (
+        _run(
+            [
+                "winget",
+                "install",
+                "--id",
+                pkg_id,
+                "-e",
+                "--accept-package-agreements",
+                "--accept-source-agreements",
+            ]
+        ).returncode
+        == 0
+    )
 
 
 def _ensure_db(url: str) -> bool:
