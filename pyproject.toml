@@ -24,6 +24,10 @@ audio = [
     "sounddevice>=0.4.7",
     "soundfile>=0.12",
     "silero-vad>=5.1",
+    # silero-vad pulls onnxruntime; cap to a version that ships Mac arm64
+    # wheels. onnxruntime 1.20+ dropped older macOS targets, leaving recent
+    # macOS releases (e.g. macOS 26) without a compatible wheel.
+    "onnxruntime>=1.18,<1.20",
 ]
 ml = [
     "whisperx>=3.1",
