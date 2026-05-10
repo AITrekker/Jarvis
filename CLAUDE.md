@@ -59,11 +59,23 @@ Do not start Phase N+1 until Phase N's gate is met.
 ### Next: Phase 1 (per PRD §7)
 
 Two parallel work streams plus a minimal control surface:
-- **Agent A:** `audio_source` (WavFileSource + MicSource + SystemAudioSource) + `segmenter` (Silero VAD)
+- **Agent A:** `audio_source` (WavFileSource + MicSource; SystemAudioSource deferred — see below) + `segmenter` (Silero VAD)
 - **Agent B:** `transcriber` — WhisperX wrapper, single-speaker mode (no diarization yet)
 - **Plus:** minimal `jarvis tray` icon + `jarvis stop` command, so recording is controllable without the terminal from day one
 
 **Gate:** WAV in → `turns` rows in Postgres with `speaker_raw="SPEAKER_00"`. Tray's *Stop recording* yields the same persisted result as `jarvis stop`.
+
+**Recommended build order** (settled in conversation 2026-05-09):
+1. `WavFileSource` + `Segmenter` + a tiny test fixture WAV — cheapest dev loop, no mic, no Whisper
+2. `Transcriber` wrapped around #1 — first time real text appears
+3. `Persister` — schema is in place, just write
+4. `Recorder` orchestrator — owns the pidfile, glues 1–3 together
+5. `MicSource` — same protocol as Wav, real-time. Triggers the macOS mic permission prompt.
+6. `Tray` — last; nothing to control until 1–5 work. SystemAudioSource also deferred to a later phase.
+
+**Acceptance tests on owner's machine:**
+- *Pipeline*: `jarvis record --source wav:tests/fixtures/local/meeting1.wav` produces `turns` rows. Fast, repeatable. Owner has Google Meet `.mp4` recordings to convert (`ffmpeg -i in.mp4 -ac 1 -ar 16000 -vn out.wav`) and drop under `tests/fixtures/local/` (gitignored).
+- *Mic*: play a 2-min YouTube clip on a **Bluetooth speaker** (laptop speakers + laptop mic often get echo-cancelled silent), `jarvis record --source mic`, stop via tray, verify `turns` look right. Slow, manual, done once per phase.
 
 The cross-platform helpers Phase 1 will build on are already in place: `jarvis/_proc.py` (pidfile + ManagedProcess + cross-platform stop), `jarvis/_progress.py` (TTY-aware spinner for slow Whisper imports), `jarvis/_paths.py` (per-OS data/config/runtime dirs), `jarvis/_logging.py` (handler reset + Windows UTF-8 + httpx silenced).
 
