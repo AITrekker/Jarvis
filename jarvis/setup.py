@@ -27,8 +27,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 MIGRATION = REPO_ROOT / "migrations" / "0001_init.sql"
 ENV_FILE = REPO_ROOT / ".env"
 
-# Default models. Small one is mandatory; large is optional and gated on RAM.
+# Default Ollama models. The 7b model is mandatory (covers query parsing).
+# The 14b model is the higher-quality summarizer + agent model; only pulled
+# automatically on machines with enough RAM to actually run it well.
 DEFAULT_MODELS_SMALL = ["qwen2.5:7b"]
+DEFAULT_MODELS_LARGE = ["qwen2.5:14b"]
+LARGE_MODEL_RAM_GB = 24  # below this, the 14b will swap when Whisper is also loaded
 
 OK = "✓"  # ✓
 FAIL = "✗"  # ✗
@@ -247,6 +251,57 @@ def check_ollama_daemon(host: str = "http://localhost:11434") -> Check:
         )
 
 
+def _required_models() -> list[str]:
+    """Pick which Ollama models we expect installed, based on system RAM."""
+    needed = list(DEFAULT_MODELS_SMALL)
+    if _system_ram_gb() >= LARGE_MODEL_RAM_GB:
+        needed += DEFAULT_MODELS_LARGE
+    return needed
+
+
+def _system_ram_gb() -> float:
+    """Best-effort RAM detection. Returns 0.0 if unknown."""
+    try:
+        # macOS / Linux
+        import resource  # noqa: F401  (probe only)
+
+        if IS_MAC:
+            out = _run(["sysctl", "-n", "hw.memsize"]).stdout.strip()
+            if out.isdigit():
+                return int(out) / (1024**3)
+        elif sys.platform.startswith("linux"):
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    if line.startswith("MemTotal:"):
+                        return int(line.split()[1]) / (1024**2)
+    except Exception:
+        pass
+    if IS_WIN:
+        try:
+            import ctypes
+
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("sullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            stat = MEMORYSTATUSEX()
+            stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+            return stat.ullTotalPhys / (1024**3)
+        except Exception:
+            return 0.0
+    return 0.0
+
+
 def check_ollama_models(host: str = "http://localhost:11434", *, skip: bool = False) -> Check:
     if skip:
         return Check("Ollama models", False, "(skipped — daemon not running)")
@@ -254,12 +309,23 @@ def check_ollama_models(host: str = "http://localhost:11434", *, skip: bool = Fa
         import httpx
 
         r = httpx.get(f"{host}/api/tags", timeout=2.0)
-        names = {m["name"].split(":")[0] for m in r.json().get("models", [])}
-        missing = [m for m in DEFAULT_MODELS_SMALL if m.split(":")[0] not in names]
+        installed_tags = {m["name"] for m in r.json().get("models", [])}
+
+        required = _required_models()
+        # Exact-tag match. A required "qwen2.5:14b" is NOT satisfied by a
+        # different tag like "qwen2.5:7b" — different model, different size.
+        missing = [m for m in required if m not in installed_tags]
+        ram = _system_ram_gb()
+        ram_label = f"{ram:.0f}GB RAM" if ram else "RAM unknown"
+        detail = (
+            f"want {required} ({ram_label}); missing {missing}"
+            if missing
+            else f"{required} present ({ram_label})"
+        )
         return Check(
             "Ollama models",
             not missing,
-            f"have: {sorted(names) or 'none'}",
+            detail,
             fix_hint=f"ollama pull {missing[0]}" if missing else None,
         )
     except Exception as e:
@@ -267,6 +333,21 @@ def check_ollama_models(host: str = "http://localhost:11434", *, skip: bool = Fa
 
 
 # ---- Optional --------------------------------------------------------------
+
+
+def check_whisper() -> Check:
+    """Whisper is in the [ml] extras and lands in Phase 1+. Informational only here."""
+    try:
+        import whisperx  # noqa: F401
+
+        return Check("WhisperX", True, "installed")
+    except ImportError:
+        return Check(
+            "WhisperX",
+            False,
+            "not installed (deferred to Phase 1)",
+            fix_hint="uv sync --extra ml --extra audio  (will pull torch + whisperx + pyannote, ~5GB)",
+        )
 
 
 def check_hf_token() -> Check:
@@ -528,11 +609,11 @@ def run(fix: bool = False) -> int:
             _run_fixers_for([o[1]])
             o = _collect_ollama()
         if o[1].ok and not o[2].ok:  # daemon up, models missing
-            for m in DEFAULT_MODELS_SMALL:
+            for m in _required_models():
                 _ollama_pull(m)
             o = _collect_ollama()
 
-    optional = [check_hf_token()]
+    optional = [check_whisper(), check_hf_token()]
 
     # ---- Render ----
     click.secho("Toolchain:", bold=True)

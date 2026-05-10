@@ -79,6 +79,8 @@ If you're a future Claude session and one of these contradicts the PRD, the PRD 
 - **Memory of past conversations:** Claude Code's `~/.claude/.../memory/` cache is local to one machine. Durable memory lives here in `CLAUDE.md`, in `PRD.md`, and in commit messages. Do not rely on the local cache for anything load-bearing.
 - **`jarvis setup` was pulled forward from Phase 6 to Phase 0** because the manual install path was friction enough to justify it. The bootstrap scripts (`bootstrap.sh`, `bootstrap.ps1`) are the recommended entry point for a fresh clone on either OS.
 - **Ollama install on Mac uses the cask** (`brew install --cask ollama`), not the formula. The cask installs the menu-bar app which auto-starts the daemon; the formula installs only the CLI and forces the user to keep `ollama serve` running manually.
+- **Ollama model selection is RAM-aware.** `jarvis setup` detects total RAM via `sysctl hw.memsize` (Mac), `/proc/meminfo` (Linux), `GlobalMemoryStatusEx` (Windows). ≥24 GB pulls both `qwen2.5:7b` (query parsing) and `qwen2.5:14b` (summarizer + agent); below 24 GB pulls only the 7b to avoid swap with Whisper loaded. Matched by exact tag — `qwen2.5:14b` is not satisfied by a `qwen2.5:7b` install.
+- **Whisper is in the `[ml]` extras and intentionally deferred to Phase 1.** `jarvis setup` reports its install status read-only; it does not auto-install because pulling torch + whisperx + pyannote is ~5 GB and only needed once the transcriber actually exists.
 
 ## Things that have already been tried and rejected
 
