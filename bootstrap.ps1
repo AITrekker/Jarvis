@@ -1,5 +1,11 @@
 # One-shot bootstrap for Windows (PowerShell). Idempotent — safe to re-run.
-# Usage: .\bootstrap.ps1
+# Usage:
+#   .\bootstrap.ps1            (full install: dev + ml + audio)
+#   .\bootstrap.ps1 -NoMl      (skip ~5GB ml/audio extras for query-only hosts)
+
+param(
+    [switch]$NoMl
+)
 
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
@@ -20,7 +26,14 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
 Ok "uv: $((Get-Command uv).Source)"
 
 Step "2/4 Sync Python deps"
-uv sync --extra dev --quiet
+if ($NoMl) {
+    Write-Host "  Skipping ml/audio extras (-NoMl)."
+    uv sync --extra dev
+} else {
+    Write-Host "  Including ml + audio extras (~5GB: torch, whisperx, pyannote)."
+    Write-Host "  Pass -NoMl to skip on a query-only host."
+    uv sync --extra dev --extra ml --extra audio
+}
 Ok "deps synced"
 
 Step "3/4 Setup checks (auto-fix where possible)"

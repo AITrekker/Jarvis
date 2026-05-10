@@ -336,7 +336,7 @@ def check_ollama_models(host: str = "http://localhost:11434", *, skip: bool = Fa
 
 
 def check_whisper() -> Check:
-    """Whisper is in the [ml] extras and lands in Phase 1+. Informational only here."""
+    """WhisperX from the [ml] extras. This is a recording bot first — required."""
     try:
         import whisperx  # noqa: F401
 
@@ -345,9 +345,36 @@ def check_whisper() -> Check:
         return Check(
             "WhisperX",
             False,
-            "not installed (deferred to Phase 1)",
-            fix_hint="uv sync --extra ml --extra audio  (will pull torch + whisperx + pyannote, ~5GB)",
+            "not installed",
+            fix_hint="uv sync --extra ml --extra audio  (~5GB: torch + whisperx + pyannote)",
+            fixers=[_uv_sync_ml],
         )
+
+
+def check_audio() -> Check:
+    """Mic capture stack from the [audio] extras. Required for recording."""
+    try:
+        import sounddevice  # noqa: F401
+
+        return Check("audio capture (sounddevice)", True, "installed")
+    except ImportError:
+        return Check(
+            "audio capture (sounddevice)",
+            False,
+            "not installed",
+            fix_hint="uv sync --extra audio",
+            fixers=[_uv_sync_ml],
+        )
+
+
+def _uv_sync_ml() -> bool:
+    """Pull the ML + audio extras. Idempotent. Streams progress to the user."""
+    if not _which("uv"):
+        click.echo("  uv not found", err=True)
+        return False
+    click.echo("  uv sync --extra ml --extra audio (this can take several minutes)...")
+    # Stream output so the user sees pip-style download progress, not a hung terminal.
+    return subprocess.run(["uv", "sync", "--extra", "ml", "--extra", "audio"]).returncode == 0
 
 
 def check_hf_token() -> Check:
@@ -577,6 +604,10 @@ def _collect_ollama() -> list[Check]:
     return [installed, daemon, models]
 
 
+def _collect_recording() -> list[Check]:
+    return [check_audio(), check_whisper()]
+
+
 def run(fix: bool = False) -> int:
     click.echo()
     click.secho("Jarvis setup", bold=True)
@@ -613,7 +644,13 @@ def run(fix: bool = False) -> int:
                 _ollama_pull(m)
             o = _collect_ollama()
 
-    optional = [check_whisper(), check_hf_token()]
+    # Recording extras: required (this is a recording bot first).
+    rec = _collect_recording()
+    if fix and not all(c.ok for c in rec):
+        _run_fixers_for(rec)
+        rec = _collect_recording()
+
+    optional = [check_hf_token()]
 
     # ---- Render ----
     click.secho("Toolchain:", bold=True)
@@ -625,10 +662,13 @@ def run(fix: bool = False) -> int:
     click.secho("Ollama:", bold=True)
     render(o)
     click.echo()
+    click.secho("Recording stack:", bold=True)
+    render(rec)
+    click.echo()
     click.secho("Optional:", bold=True)
     render(optional)
 
-    required = tool + db + o
+    required = tool + db + o + rec
     # A check is "actionable" if it failed AND it's not just cascading from an
     # upstream failure. Skipped checks have a "(skipped" prefix in detail.
     actionable = [c for c in required if not c.ok and not c.detail.startswith("(skipped")]

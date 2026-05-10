@@ -1,9 +1,23 @@
 #!/usr/bin/env bash
 # One-shot bootstrap for macOS / Linux. Idempotent — safe to re-run.
 # On Windows, use bootstrap.ps1.
+#
+# Default: installs the full recording stack (WhisperX + pyannote + torch).
+# Use --no-ml to skip the ML extras (~5GB) for query-only hosts.
 
 set -uo pipefail
 cd "$(dirname "$0")"
+
+INSTALL_ML=1
+for arg in "$@"; do
+  case "$arg" in
+    --no-ml) INSTALL_ML=0 ;;
+    -h|--help)
+      sed -n '2,7p' "$0"
+      exit 0 ;;
+    *) printf "unknown arg: %s\n" "$arg" >&2; exit 2 ;;
+  esac
+done
 
 step() { printf "\n\033[1;36m▶ %s\033[0m\n" "$*"; }
 ok()   { printf "\033[1;32m✓ %s\033[0m\n" "$*"; }
@@ -23,7 +37,14 @@ fi
 ok "uv: $(command -v uv)"
 
 step "2/4 Sync Python deps"
-uv sync --extra dev --quiet
+if [ "$INSTALL_ML" -eq 1 ]; then
+  echo "  Including ml + audio extras (~5GB: torch, whisperx, pyannote)."
+  echo "  Pass --no-ml to skip on a query-only host."
+  uv sync --extra dev --extra ml --extra audio
+else
+  echo "  Skipping ml/audio extras (--no-ml)."
+  uv sync --extra dev
+fi
 ok "deps synced"
 
 step "3/4 Setup checks (auto-fix where possible)"
