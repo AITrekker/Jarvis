@@ -120,19 +120,40 @@ def check_db_reachable(url: str | None) -> Check:
     try:
         import psycopg
 
+        # Silence psycopg's chatty multi-host error before we render our own.
         with psycopg.connect(url, connect_timeout=3) as conn, conn.cursor() as cur:
             cur.execute("SELECT 1")
         return Check("Postgres reachable", True, url)
     except Exception as e:
-        msg = str(e).strip().split("\n")[0][:100]
-        # Try to give a useful hint.
-        hint = "ensure Postgres is running"
-        if "does not exist" in str(e):
-            hint = f"createdb {url.rsplit('/', 1)[-1]}"
-        return Check("Postgres reachable", False, msg, fix_hint=hint)
+        s = str(e)
+        if "does not exist" in s:
+            db_name = url.rsplit("/", 1)[-1].split("?")[0]
+            return Check(
+                "Postgres reachable",
+                False,
+                f"database '{db_name}' does not exist",
+                fix_hint=f"createdb {db_name}  (or re-run with --fix)",
+            )
+        if "Connection refused" in s or "could not connect" in s:
+            hint = (
+                "open Postgres.app and click Start (or `open -a Postgres`)"
+                if IS_MAC
+                else "start the Postgres service"
+            )
+            return Check(
+                "Postgres reachable",
+                False,
+                "server not running on localhost:5432",
+                fix_hint=hint,
+                fixers=[_start_postgres_app] if IS_MAC else [],
+            )
+        msg = s.strip().split("\n")[0][:80]
+        return Check("Postgres reachable", False, msg, fix_hint="check Postgres status")
 
 
-def check_db_extensions(url: str | None) -> Check:
+def check_db_extensions(url: str | None, *, skip: bool = False) -> Check:
+    if skip:
+        return Check("pgvector + pg_trgm", False, "(skipped — Postgres not reachable)")
     if not url:
         return Check("pgvector + pg_trgm", False, "no DB url")
     try:
@@ -156,7 +177,9 @@ def check_db_extensions(url: str | None) -> Check:
         return Check("pgvector + pg_trgm", False, str(e)[:100])
 
 
-def check_db_schema(url: str | None) -> Check:
+def check_db_schema(url: str | None, *, skip: bool = False) -> Check:
+    if skip:
+        return Check("schema applied", False, "(skipped — Postgres not reachable)")
     if not url:
         return Check("schema applied", False, "no DB url")
     expected = {
@@ -208,12 +231,21 @@ def check_ollama_daemon(host: str = "http://localhost:11434") -> Check:
         r = httpx.get(f"{host}/api/tags", timeout=2.0)
         return Check("Ollama daemon", r.status_code == 200, host)
     except Exception:
+        hint = (
+            "`open -a Ollama` (or `ollama serve` in another terminal)" if IS_MAC else "start Ollama"
+        )
         return Check(
-            "Ollama daemon", False, "not reachable", fix_hint="run `ollama serve` (or the app)"
+            "Ollama daemon",
+            False,
+            "not running on localhost:11434",
+            fix_hint=hint,
+            fixers=[_start_ollama] if IS_MAC else [],
         )
 
 
-def check_ollama_models(host: str = "http://localhost:11434") -> Check:
+def check_ollama_models(host: str = "http://localhost:11434", *, skip: bool = False) -> Check:
+    if skip:
+        return Check("Ollama models", False, "(skipped — daemon not running)")
     try:
         import httpx
 
@@ -274,6 +306,52 @@ def _winget_install(pkg_id: str) -> bool:
     )
 
 
+def _start_postgres_app() -> bool:
+    """Open Postgres.app on macOS. The app auto-starts the configured server."""
+    if not IS_MAC:
+        return False
+    if not Path("/Applications/Postgres.app").exists():
+        click.echo("  Postgres.app not installed at /Applications/Postgres.app", err=True)
+        return False
+    click.echo("  starting Postgres.app...")
+    _run(["open", "-a", "Postgres"])
+    # Give it a few seconds to bind the port.
+    import time
+
+    for _ in range(10):
+        time.sleep(0.5)
+        try:
+            import psycopg
+
+            with psycopg.connect(
+                _default_db_url().rsplit("/", 1)[0] + "/postgres", connect_timeout=1
+            ):
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _start_ollama() -> bool:
+    """Open the Ollama app on macOS, which spawns the daemon."""
+    if not IS_MAC:
+        return False
+    click.echo("  starting Ollama...")
+    _run(["open", "-a", "Ollama"])
+    import time
+
+    for _ in range(10):
+        time.sleep(0.5)
+        try:
+            import httpx
+
+            if httpx.get("http://localhost:11434/api/tags", timeout=1.0).status_code == 200:
+                return True
+        except Exception:
+            continue
+    return False
+
+
 def _ensure_db(url: str) -> bool:
     """Create DB if missing, install extensions, apply schema. Idempotent."""
     import psycopg
@@ -287,7 +365,8 @@ def _ensure_db(url: str) -> bool:
             conn.close()
     except psycopg.OperationalError as e:
         if "does not exist" not in str(e):
-            click.echo(f"  Postgres unreachable: {e}", err=True)
+            # Don't dump the multi-line psycopg error here; the check above
+            # already rendered a clean one-line message.
             return False
         click.echo(f"  creating database {db_name}...")
         try:
@@ -338,67 +417,124 @@ def _write_env(url: str) -> None:
 # ---- Public entry point --------------------------------------------------
 
 
-def render(checks: list[Check]) -> bool:
-    all_ok = True
+def render(checks: list[Check]) -> None:
     for c in checks:
-        sym = OK if c.ok else FAIL
+        sym = click.style(OK, fg="green") if c.ok else click.style(FAIL, fg="red")
         click.echo(f"  {sym} {c.name:<22} {c.detail}")
         if not c.ok and c.fix_hint:
             click.echo(f"      → {c.fix_hint}")
-        if not c.ok:
-            all_ok = False
-    return all_ok
+
+
+def _run_fixers_for(checks: list[Check]) -> None:
+    for c in checks:
+        if c.ok:
+            continue
+        for fn in c.fixers:
+            try:
+                fn()
+            except Exception as e:
+                click.echo(f"  fixer failed: {e}", err=True)
+
+
+def _collect_toolchain() -> list[Check]:
+    return [check_python(), check_uv(), check_ffmpeg(), check_psql()]
+
+
+def _collect_db(url: str) -> list[Check]:
+    reach = check_db_reachable(url)
+    # If the server isn't reachable, skip the dependent checks rather than
+    # repeating the same long connection error three times.
+    return [
+        reach,
+        check_db_extensions(url, skip=not reach.ok),
+        check_db_schema(url, skip=not reach.ok),
+    ]
+
+
+def _collect_ollama() -> list[Check]:
+    installed = check_ollama()
+    daemon = (
+        check_ollama_daemon()
+        if installed.ok
+        else Check("Ollama daemon", False, "(skipped — Ollama not installed)")
+    )
+    models = check_ollama_models(skip=not daemon.ok)
+    return [installed, daemon, models]
 
 
 def run(fix: bool = False) -> int:
-    click.echo("\nJarvis setup\n")
+    click.echo()
+    click.secho("Jarvis setup", bold=True)
+    click.echo()
 
-    click.echo("Toolchain:")
-    tool_checks = [check_python(), check_uv(), check_ffmpeg(), check_psql()]
-    if fix:
-        for c in tool_checks:
-            if not c.ok:
-                for fn in c.fixers:
-                    fn()
-        tool_checks = [check_python(), check_uv(), check_ffmpeg(), check_psql()]
-    render(tool_checks)
-
-    # Auto-pick a DB URL if none set.
     db_url = os.environ.get("JARVIS_DB_URL") or _default_db_url()
 
-    click.echo("\nDatabase:")
-    db_checks = [check_db_reachable(db_url), check_db_extensions(db_url), check_db_schema(db_url)]
-    if fix and not all(c.ok for c in db_checks) and _ensure_db(db_url):
-        _write_env(db_url)
-        db_checks = [
-            check_db_reachable(db_url),
-            check_db_extensions(db_url),
-            check_db_schema(db_url),
-        ]
-    render(db_checks)
-
-    click.echo("\nOllama:")
-    o_checks = [check_ollama(), check_ollama_daemon(), check_ollama_models()]
+    # ---- 1. Toolchain (install missing CLIs) ----
+    tool = _collect_toolchain()
     if fix:
-        if not o_checks[0].ok:
-            for fn in o_checks[0].fixers:
-                fn()
-            o_checks = [check_ollama(), check_ollama_daemon(), check_ollama_models()]
-        if o_checks[1].ok and not o_checks[2].ok:
+        _run_fixers_for(tool)
+        tool = _collect_toolchain()
+
+    # ---- 2. Database (start server, then create db + extensions + schema) ----
+    db = _collect_db(db_url)
+    if fix:
+        _run_fixers_for(db)  # may start Postgres.app on Mac
+        db = _collect_db(db_url)
+        if not all(c.ok for c in db) and _ensure_db(db_url):
+            _write_env(db_url)
+            db = _collect_db(db_url)
+
+    # ---- 3. Ollama (start daemon, then pull models) ----
+    o = _collect_ollama()
+    if fix:
+        if not o[0].ok:  # binary missing
+            _run_fixers_for([o[0]])
+            o = _collect_ollama()
+        if o[0].ok and not o[1].ok:  # binary present but daemon down
+            _run_fixers_for([o[1]])
+            o = _collect_ollama()
+        if o[1].ok and not o[2].ok:  # daemon up, models missing
             for m in DEFAULT_MODELS_SMALL:
                 _ollama_pull(m)
-            o_checks[2] = check_ollama_models()
-    render(o_checks)
+            o = _collect_ollama()
 
-    click.echo("\nOptional:")
-    render([check_hf_token()])
+    optional = [check_hf_token()]
 
-    all_ok = all(c.ok for c in tool_checks + db_checks + o_checks)
+    # ---- Render ----
+    click.secho("Toolchain:", bold=True)
+    render(tool)
     click.echo()
-    if all_ok:
-        click.echo(f"  {OK} ready. Try: uv run jarvis --help")
-    else:
-        click.echo(
-            f"  {WARN} some checks failed. Re-run with `--fix` to auto-remediate where possible."
+    click.secho("Database:", bold=True)
+    render(db)
+    click.echo()
+    click.secho("Ollama:", bold=True)
+    render(o)
+    click.echo()
+    click.secho("Optional:", bold=True)
+    render(optional)
+
+    required = tool + db + o
+    # A check is "actionable" if it failed AND it's not just cascading from an
+    # upstream failure. Skipped checks have a "(skipped" prefix in detail.
+    actionable = [c for c in required if not c.ok and not c.detail.startswith("(skipped")]
+
+    click.echo()
+    if not actionable and all(c.ok for c in required):
+        click.secho(
+            f"  {OK} all required checks pass. Try: uv run jarvis --help", fg="green", bold=True
         )
-    return 0 if all_ok else 1
+        return 0
+
+    click.secho(f"  {FAIL} {len(actionable)} thing(s) to fix:", fg="red", bold=True)
+    for c in actionable:
+        click.echo(f"      • {c.name}: {c.detail}")
+        if c.fix_hint:
+            click.echo(f"        → {c.fix_hint}")
+    skipped = [c for c in required if c.detail.startswith("(skipped")]
+    if skipped:
+        click.echo()
+        click.echo(f"  ({len(skipped)} dependent check(s) skipped — fix the items above first.)")
+    if not fix:
+        click.echo()
+        click.echo("  Try: uv run jarvis setup --fix")
+    return 1
