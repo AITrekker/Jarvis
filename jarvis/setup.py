@@ -13,6 +13,7 @@ specific fix hint and left to the user.
 
 from __future__ import annotations
 
+import glob
 import os
 import platform
 import shutil
@@ -95,7 +96,39 @@ def check_ffmpeg() -> Check:
 
 
 def check_psql() -> Check:
+    """Look for psql on PATH, then in the standard Mac/Win install locations.
+
+    Subprocesses launched from one shell don't always inherit another shell's
+    PATH additions (e.g. Postgres.app's bin dir gets added by .zshrc but not by
+    nox / a script not running under that shell). Probe known paths so the
+    check doesn't false-negative right after a successful install.
+    """
     p = _which("psql")
+    if not p:
+        candidates: list[str] = []
+        if IS_MAC:
+            # Postgres.app
+            candidates += sorted(
+                glob.glob("/Applications/Postgres.app/Contents/Versions/*/bin/psql"),
+                reverse=True,  # newest version first
+            )
+            # Homebrew
+            candidates += [
+                "/opt/homebrew/opt/postgresql@16/bin/psql",
+                "/opt/homebrew/bin/psql",
+                "/usr/local/opt/postgresql@16/bin/psql",
+                "/usr/local/bin/psql",
+            ]
+        elif IS_WIN:
+            candidates += sorted(
+                glob.glob(r"C:\Program Files\PostgreSQL\*\bin\psql.exe"),
+                reverse=True,
+            )
+        for c in candidates:
+            if Path(c).exists():
+                p = c
+                break
+
     if IS_MAC:
         hint = "install Postgres.app from https://postgresapp.com (recommended)"
     elif IS_WIN:
