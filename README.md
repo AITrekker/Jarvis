@@ -37,6 +37,26 @@ A single Python process. Audio is captured by a configurable source (mic, system
 
 ## Getting started
 
+The fast path. From a fresh clone:
+
+```bash
+# macOS / Linux
+./bootstrap.sh
+
+# Windows (PowerShell)
+.\bootstrap.ps1
+```
+
+The bootstrap script installs `uv`, syncs deps, runs `jarvis setup --fix` (which checks ffmpeg, Postgres, pgvector, schema, Ollama, models — and installs / creates what it can), and runs the unit tests as a smoke check. Anything that needs a click (Postgres.app first launch, macOS mic permission) is reported with a specific fix hint and you re-run.
+
+If you already have things set up and just want to verify state:
+
+```bash
+uv run jarvis setup
+```
+
+The rest of this section documents the manual steps the bootstrap automates, in case you want to do them yourself or something fails.
+
 Jarvis runs identically on macOS and Windows (and Linux). The Python code is portable; only the install commands differ. CI exercises `ubuntu-latest`, `macos-latest`, and `windows-latest` on every push.
 
 ### Prerequisites (both OSes)

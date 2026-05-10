@@ -22,6 +22,15 @@ def main(debug: bool) -> None:
 
 
 @main.command()
+@click.option("--fix", is_flag=True, help="Try to install missing prereqs and create the DB.")
+def setup(fix: bool) -> None:
+    """Check (and optionally install) all prerequisites for Jarvis."""
+    from . import setup as _setup
+
+    raise SystemExit(_setup.run(fix=fix))
+
+
+@main.command()
 @click.option("--source", default="mic", help="mic | system | wav:<path>")
 @click.option("--event-id", default=None, type=int)
 def record(source: str, event_id: int | None) -> None:
