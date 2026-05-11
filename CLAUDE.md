@@ -101,6 +101,19 @@ If you're a future Claude session and one of these contradicts the PRD, the PRD 
 - **Chat-summary-only search** (v1) — turn-level queries failed. Hard rule: multi-granularity (turn / chunk / meeting).
 - **`make` as the task runner** (Phase 0 first pass) — replaced by `nox` because `make` isn't on Windows by default. Makefile remains as a Mac/Linux convenience shim only.
 
+## How to start a new session
+
+Run these first so you're grounded in current reality, not in this file's snapshot:
+
+```bash
+git -C /Users/gupta.amit2/Jarvis status
+git -C /Users/gupta.amit2/Jarvis log --oneline -15
+uv run jarvis setup           # confirms toolchain, DB, Ollama, recording stack
+uv run nox -s test_unit       # confirms 21 unit tests still green
+```
+
+If `jarvis setup` shows anything ✗ that the build phase claims should be ✓, fix that *before* writing new code — Phase 0 is the foundation. If commits past the ones referenced here exist, read their messages: they may have changed decisions captured above.
+
 ## When in doubt
 
 1. Re-read the relevant section of `PRD.md`.
