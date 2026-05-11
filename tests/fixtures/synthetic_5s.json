@@ -1,0 +1,18 @@
+{
+  "description": "Synthetic 5s fixture for Phase 1 segmenter tests. Tones, not speech.",
+  "sample_rate": 16000,
+  "duration_seconds": 5.0,
+  "channels": 1,
+  "expected_voiced_regions": [
+    {
+      "t_start": 0.5,
+      "t_end": 2.0
+    },
+    {
+      "t_start": 3.0,
+      "t_end": 4.5
+    }
+  ],
+  "tolerance_seconds": 0.2,
+  "notes": "Whisper will not produce meaningful text from this. Use only for VAD/plumbing tests."
+}
