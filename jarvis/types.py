@@ -1,4 +1,9 @@
-"""Cross-module dataclasses. Modules depend on these, not on each other."""
+"""Cross-module dataclasses. Modules depend on these, not on each other.
+
+Locked 2026-05-11 as the Phase 1 interface contract. Sub-agents must not
+rename or repurpose fields without updating this file *and* PRD §3 in the
+same PR. Adding optional fields is fine; renaming is a breaking change.
+"""
 
 from __future__ import annotations
 
@@ -10,14 +15,18 @@ import numpy as np
 
 @dataclass
 class AudioChunk:
-    pcm: np.ndarray
-    t_start: float
+    """Fixed-frame PCM block emitted by an AudioSource. PRD §3.1."""
+
+    pcm: np.ndarray  # int16, shape (n_samples,), mono, 16 kHz
+    t_start: float   # seconds since session start
     t_end: float
 
 
 @dataclass
 class AudioSegment:
-    pcm: np.ndarray
+    """Voiced region produced by the segmenter. PRD §3.2."""
+
+    pcm: np.ndarray  # int16, shape (n_samples,), mono, 16 kHz
     t_start: float
     t_end: float
 
