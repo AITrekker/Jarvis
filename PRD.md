@@ -74,7 +74,7 @@ Every arrow is an in-process function call or a row in Postgres. There is no mes
 
 Single *process*, not single *thread*. The pipeline has three stages with different concurrency needs:
 
-- **Capture (live recording)** — runs on a dedicated thread driven by PortAudio's callback. Pushes PCM frames into a bounded ring buffer (default 60s of audio). On overflow, oldest frames are dropped with a logged warning. The capture thread never touches Postgres, never calls Whisper, never blocks on I/O beyond the queue push. This is the only stage with hard real-time requirements.
+- **Capture (live recording)** — runs on a dedicated thread driven by PortAudio's callback. Pushes PCM frames into a bounded ring buffer (default 60s of audio). On overflow, oldest frames are dropped with a logged warning. The capture thread never touches Postgres, never calls Whisper, never blocks on I/O beyond the queue push. This is the only stage with hard real-time requirements. **The capture thread also writes the raw PCM to a WAV file on disk** (one file per session, in `~/.local/share/jarvis/audio/<session_uuid>.wav`); the downstream pipeline operates on that file after `record` stops. This makes recording crash-resistant (a killed pipeline can be re-run via `jarvis process <session_uuid>`) and means `MicSource` and `WavFileSource` collapse to "the same thing, different time" — the segmenter and transcriber only ever see a WAV on disk.
 - **Pipeline (segment → transcribe → diarize → resolve → persist)** — synchronous, runs *after* `record` stops in v1. It's a batch job; "the CLI is busy for two minutes" is acceptable. No internal concurrency required.
 - **Summarizer** — fire-and-forget after `persist` commits. Runs in a background thread or subprocess; its failure or slowness must not roll back or block the recording write.
 - **Search** — independent CLI invocation. Talks only to Postgres. No shared state with capture or pipeline; safe to run while a recording is being processed.
@@ -104,26 +104,39 @@ The system has four distinct layers with different programming models. Conflatin
 
 ### 2.3 User-facing surfaces
 
-Jarvis exposes the same backend through three surfaces with different jobs. **We do not build a bespoke chat UI.** In 2026 the chat surface is the LLM host (Claude Desktop, Cursor, ChatGPT Desktop) — rebuilding it loses to what those apps already ship.
+Jarvis exposes the same backend through several surfaces. **We do not build a bespoke chat UI.** The owner's org does not allow Claude Desktop, so the staged plan is: use Claude Code (already an MCP client) as a "loaner reasoner" via `jarvis mcp serve` while the local agent is built, then swap in the local agent as the primary query surface.
 
 | Surface | Purpose | Built in phase |
 |---|---|---|
-| **CLI** (`jarvis ...`) | Dev loop, scripting, cron jobs, headless servers. Every other surface is a thin adapter over the same Python functions the CLI calls. | 0 → ongoing |
-| **MCP server** (`jarvis mcp serve`) | Production query path. Users point Claude Desktop / Cursor / ChatGPT Desktop at it and query their meeting memory from the chat app they already use. Stdio transport (local-only); remote MCP / HTTP is out of scope for v1. | 4 |
-| **Tray app** (`jarvis tray`) | Recording-control surface only. Runs as a separate process from the recorder; provides a visible 🔴 in the OS menu bar / system tray with a one-click stop. Cross-platform via `pystray`. **Not** a UI for search or chat. | 1 (basic) → 2 (polish) |
+| **CLI** (`jarvis ...`) | Dev loop, scripting, cron jobs, headless servers. Every other surface is a thin adapter over the same Python functions the CLI calls. Includes `jarvis search` for direct hybrid-search queries (no reasoner needed). | 0 → ongoing |
+| **MCP server** (`jarvis mcp serve`) | Bridge surface. Lets any MCP host (Claude Code during development, Cursor, future hosts) drive the same tools registry. Stdio transport, local-only. **Primary query path during Phase 4** while the local agent is being built. Demoted to "convenience surface" once Phase 5 lands. | 4 |
+| **Local agent** (`jarvis chat`) | Primary query surface end-state. Local LLM (Ollama) over the tools registry, with multi-turn state, self-correction, and citations. Replaces the Claude-Code-as-reasoner pattern. | 5 |
+| **Tray app** (`jarvis tray`) | Recording-control surface only. Runs as a separate process from the recorder; provides a visible 🔴 in the OS menu bar / system tray with a one-click stop. Cross-platform via `pystray`. **Not** a UI for search or chat. | 1 (basic) → 6 (polish) |
 
 **Architecture:**
 ```
-        ┌─── jarvis.cli (Click) ────────┐
-        │                                │
-        ├─── jarvis.mcp_server (MCP) ──┐ │
-core ◄──┤                                │
-        ├─── jarvis.tray (pystray) ────┐ │
-        │                                │
-        └─── (future: jarvis.http) ────┘ │
-                                          ▼
-                              jarvis.tools registry
-                              jarvis.search / calendar / persister / ...
+   jarvis chat (CLI REPL)        Claude Code / Cursor (MCP host)
+          │                              │
+          ▼                              ▼
+   ┌─────────────┐              ┌──────────────────┐
+   │ jarvis.agent│              │ jarvis.mcp_server│   ← bridge surface
+   │ (Ollama,    │              │ (stdio MCP)      │     (Phase 4 → onward)
+   │  Phase 5)   │              └──────────────────┘
+   └─────────────┘                       │
+          │                              │
+          └──────────────┬───────────────┘
+                         ▼
+                jarvis.tools registry
+                         │
+         ┌───────────────┼────────────────┐
+         ▼               ▼                ▼
+   jarvis.search   jarvis.calendar    jarvis.persister  ...
+                         │
+                         ▼
+               Postgres + pgvector
+
+   jarvis.cli (Click)  ◄── direct entry to every module above
+   jarvis.tray         ◄── record-control surface, signals jarvis record
 ```
 
 **Rules:**
@@ -171,9 +184,9 @@ class AudioChunk:
 ```
 
 **Implementations (v1):**
-- `MicSource` — `sounddevice` InputStream, default input device
-- `WavFileSource` — reads a WAV file, emits chunks at real-time pacing OR as fast as possible (configurable; tests use fast mode)
-- `SystemAudioSource` — reads from a named device (e.g. `BlackHole 2ch`); listed in v1 scope but **lowest priority**, build last
+- `WavFileSource` — reads a WAV file, emits chunks at real-time pacing OR as fast as possible (configurable; tests use fast mode). Built first; the pipeline always reads from a WAV.
+- `MicSource` — `sounddevice` InputStream, default input device. **Writes incoming PCM to a session WAV on disk while emitting AudioChunks.** Per §2.1, the segmenter/transcriber pipeline runs *post-stop* on the persisted WAV, not live off the mic stream. This collapses the capture surface to "WAV writer + WAV reader" — no streaming pipeline in v1.
+- `SystemAudioSource` — reads from a named device (e.g. `BlackHole 2ch`); listed in v1 scope but **lowest priority**, build last (Phase 2+).
 
 **Acceptance:**
 - All three implementations produce identical downstream behavior when fed equivalent audio
@@ -324,6 +337,8 @@ def find_event_for_recording(
 
 **Operation:** Open one transaction; insert `recording`, `turns`, `chunks`, `embeddings`. Commit or rollback as a unit. Embeddings are stored in pgvector columns on the same rows — there is no separate vector store to coordinate with.
 
+**Phase 1 scope:** writes only `recordings` + `turns`. `chunks` and `embeddings` land in Phase 3 alongside the embedding model decision (PRD §8.1). The `speakers` and `calendar_event` arguments are accepted in the signature but ignored on write until Phase 2; sub-agents should leave the parameters in place rather than removing them and reintroducing them later.
+
 **Interface:**
 ```python
 def persist_recording(
@@ -445,7 +460,9 @@ class ToolResult:
 
 ### 3.10 `agent` — conversational planner/reasoner
 
-**Purpose:** Single primary agent that owns conversation state and decides which tools to call. This is the layer Jarvis lacked.
+**Built in:** Phase 5 (deferred — see §7). Until then, an MCP host (Claude Code) plays this role over `jarvis mcp serve`.
+
+**Purpose:** Single primary agent that owns conversation state and decides which tools to call. This is the layer Jarvis lacked, and the *learning lab* for agentic patterns the owner cares about (decompose → tool-call → observe → re-plan → cite).
 
 **Capabilities:**
 - **Query decomposition** — break compound queries ("what's blocking my project across last week's meetings and Slack") into a tool-call sequence.
@@ -504,7 +521,9 @@ jarvis setup                           # check Ollama, models, Postgres, mic per
 
 ### 3.12 `mcp_server` — MCP adapter for chat hosts
 
-**Purpose:** Expose the tool registry (§3.9) over MCP so Claude Desktop / Cursor / ChatGPT Desktop can call Jarvis tools as part of a conversation. This is the *primary* end-user surface for queries; the CLI `jarvis chat` is for dev only.
+**Built in:** Phase 4. Primary query surface during Phases 4 → 5 (Claude Code acts as the loaner reasoner). After Phase 5 ships the local agent, MCP demotes to a convenience surface for users who'd rather drive Jarvis from an MCP host (Cursor, Claude Code, future hosts).
+
+**Purpose:** Expose the tool registry (§3.9) over MCP so an MCP host can call Jarvis tools as part of a conversation. The owner's org does not allow Claude Desktop, so the host of record during the build is **Claude Code** — already an MCP client and already in use for development.
 
 **Implementation:** Thin wrapper over the `mcp` Python SDK. Subscribes to the existing `tools` registry; every registered tool becomes an MCP tool with the same name, description, and JSON schema. No business logic lives here.
 
@@ -566,6 +585,41 @@ The tray and the recorder are intentionally separate processes so the tray stays
 - Clicking *Stop recording* during a recording results in a clean transcript persisted within 30s
 - Force-quitting the tray app does **not** kill an in-progress recording (the recorder is its own process)
 - Force-killing the recorder while the tray is running results in the tray icon returning to idle within 5s (pidfile staleness check)
+
+---
+
+### 3.14 `recorder` — pipeline orchestrator
+
+**Purpose:** The single entry point that owns a recording session end-to-end. Glues `audio_source` + `segmenter` + `transcriber` + `persister` together, owns the pidfile, handles graceful shutdown on SIGTERM.
+
+**Lifecycle:**
+1. Generate `session_uuid`, write pidfile via `_proc.write_pidfile()`. If a live pidfile already exists, refuse to start (raise `RecorderAlreadyRunning`).
+2. Open the `AudioSource`. For `MicSource`, the source streams PCM to a session WAV on disk.
+3. Block until SIGTERM (or until `WavFileSource` exhausts in batch mode).
+4. On stop: close the source, run `segment` → `transcribe` → `persist_recording`. Single thread, post-stop. Failures here do **not** delete the WAV — `jarvis process <session_uuid>` can re-run.
+5. Clear the pidfile.
+
+**Interface:**
+```python
+class RecorderAlreadyRunning(RuntimeError): ...
+
+@dataclass
+class RecorderResult:
+    session_uuid: str
+    recording_id: int | None   # None if pipeline failed but WAV is on disk
+    audio_path: Path
+    turns_written: int
+
+def run(source: AudioSource, *, session_uuid: str | None = None) -> RecorderResult: ...
+```
+
+**Phase 1 scope:** single-speaker mode (no diarization, all turns get `speaker_raw="SPEAKER_00"`). Calendar enrichment + speaker resolution are no-ops; they're added in Phase 2.
+
+**Acceptance:**
+- `jarvis record --source wav:tests/fixtures/synthetic_5s.wav` produces ≥1 row in `recordings` and ≥1 row in `turns`.
+- `jarvis stop` (SIGTERM) on an in-progress mic recording produces the same persisted result as letting `WavFileSource` finish on the same audio.
+- Starting a second `jarvis record` while one is running fails fast with `RecorderAlreadyRunning`.
+- Re-running on the same session_uuid is idempotent (PRD §3.6).
 
 ---
 
@@ -736,23 +790,27 @@ Modules are arranged so multiple agents can work in parallel. **Phase boundaries
 - `summarizer` + `search` (hybrid query, no agent yet — direct CLI)
 - **Gate:** *"what did I say to <name> last week"* on seeded data returns correct results via direct hybrid search (no LLM planner)
 
-### Phase 4 — tool registry + primary agent + MCP server (1 agent)
+### Phase 4 — tool registry + MCP server (loaner-reasoner milestone) (1 agent)
 - `tools` registry with `local_search`, `calendar_query`, `enroll_speaker_lookup`
-- `agent` primary planner/reasoner with conversation state, query decomposition, self-correction, citations
 - `mcp_server` exposing the registry over stdio (§3.12); `jarvis mcp serve` and `jarvis mcp print-config` commands
-- **Gate (CLI):** Compound query via `jarvis chat` that requires two local tool calls produces a correct answer with a visible tool trace and citations
-- **Gate (MCP):** With Jarvis registered as an MCP server in Claude Desktop (or Cursor), the same compound query asked in the host produces a correct answer using Jarvis tools, with tool call results visible in the host's UI
+- **No local agent yet** — Claude Code (which is already an MCP client) plays the reasoner role for this phase. Owner's org does not allow Claude Desktop, so Claude Code is the host of record.
+- **Gate:** With Jarvis registered as an MCP server in Claude Code, a compound query that requires two tool calls (e.g. "what did I say to Priya last week about pricing?") produces a correct answer with citations sourced from Jarvis tools. **System is fully usable end-to-end at the end of this phase.**
 
-### Phase 5 — MCP integrations (1 agent)
-- `slack_search` and `gmail_search` MCP tools, registered with the agent
-- **Gate:** Cross-source query *"what's blocking project X across last week's meetings and Slack"* returns synthesized answer with citations from both Postgres and Slack MCP
+### Phase 5 — local agent (1 agent)
+- `agent` primary planner/reasoner with conversation state, query decomposition, self-correction, citations (§3.10)
+- `LLMClient` over OpenAI-compatible HTTP, talking to Ollama by default
+- `jarvis chat` CLI REPL as the primary day-to-day query surface
+- Borrow the model→tool→model loop pattern from `jonigl/mcp-client-for-ollama` (see `docs/references.md`)
+- **Gate:** The same compound query that worked via Claude Code in Phase 4 also works via `jarvis chat` against the local Ollama agent — correct answer, multi-turn follow-up ("…and what about with Raj?") inherits filters, citations preserved. After this lands, MCP demotes from primary to convenience surface.
 
-### Phase 6 — sub-agents, tray polish, setup (1 agent)
+### Phase 6 — Slack/Gmail MCP, sub-agents, tray polish, setup (1 agent)
+- `slack_search` and `gmail_search` MCP tools, registered with both the local agent and `mcp_server`
+- Cross-source query *"what's blocking project X across last week's meetings and Slack"* returns synthesized answer with citations from both Postgres and Slack MCP
 - Sub-agent for meeting summarization (replaces direct `summarizer` call from Phase 3)
 - Tray polish: state polling, *Open last transcript*, recovery from stale pidfile, Windows tray-visibility documentation
 - `jarvis setup` health check: Ollama daemon, models, Postgres reachability, mic + accessibility permissions on macOS
-- End-to-end docs covering: install, `jarvis setup`, register the MCP server in Claude Desktop, run a recording from the tray, query from the host
-- **Gate:** Fresh-clone → `make setup && jarvis setup && jarvis record --source wav:fixtures/four_speaker.wav` succeeds; querying the result from a registered chat host (Claude Desktop) returns the expected answer with citations
+- End-to-end docs covering: install, `jarvis setup`, register the MCP server in Claude Code, run a recording from the tray, query from `jarvis chat` and from the MCP host
+- **Gate:** Fresh-clone → `bootstrap.sh && jarvis setup && jarvis record --source wav:fixtures/four_speaker.wav` succeeds; querying the result both from `jarvis chat` and from Claude Code returns the expected answer with citations
 
 ### Cross-phase rules for agents
 - Implement against the interface in §3 first; do not change interfaces without updating this PRD
