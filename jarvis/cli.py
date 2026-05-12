@@ -7,10 +7,12 @@ thin wrapper around a module function — no business logic here.
 from __future__ import annotations
 
 import logging
+import uuid
+from pathlib import Path
 
 import click
 
-from . import __version__, _logging
+from . import __version__, _logging, _paths, _proc
 
 
 @click.group()
@@ -35,7 +37,57 @@ def setup(fix: bool) -> None:
 @click.option("--event-id", default=None, type=int)
 def record(source: str, event_id: int | None) -> None:
     """Record audio and run the pipeline."""
-    raise click.ClickException("record: not implemented yet (Phase 1)")
+    del event_id  # Phase 2 (calendar enrichment).
+    from . import recorder
+    from .audio_source import MicSource, WavFileSource
+
+    session_uuid = str(uuid.uuid4())
+
+    if source.startswith("wav:"):
+        wav_path = Path(source[4:]).expanduser()
+        if not wav_path.exists():
+            raise click.ClickException(f"WAV file not found: {wav_path}")
+        audio_source = WavFileSource(wav_path)
+    elif source == "mic":
+        audio_dir = _paths.data_dir() / "audio"
+        audio_dir.mkdir(parents=True, exist_ok=True)
+        wav_out_path = audio_dir / f"{session_uuid}.wav"
+        audio_source = MicSource(wav_out_path=wav_out_path)
+    elif source == "system":
+        raise click.ClickException("system audio source: deferred to a later phase.")
+    else:
+        raise click.ClickException(
+            f"unknown source: {source!r}; expected 'mic', 'system', or 'wav:<path>'"
+        )
+
+    try:
+        result = recorder.run(audio_source, session_uuid=session_uuid)
+    except recorder.RecorderAlreadyRunning as e:
+        raise click.ClickException(str(e)) from e
+
+    if result.recording_id is None:
+        click.echo(
+            f"recording finished but pipeline failed; WAV preserved at {result.audio_path}. "
+            f"re-run with `jarvis process {result.session_uuid}`",
+            err=True,
+        )
+    else:
+        click.echo(
+            f"recorded session={result.session_uuid} "
+            f"recording_id={result.recording_id} turns={result.turns_written}"
+        )
+
+
+@main.command()
+@click.option("--force", is_flag=True, help="SIGKILL instead of SIGTERM.")
+def stop(force: bool) -> None:
+    """Signal an in-progress `jarvis record` to finalize and exit."""
+    pid = _proc.read_pidfile()
+    if pid is None:
+        click.echo("no recorder running.", err=True)
+        raise SystemExit(1)
+    _proc.stop_pid(pid, force=force)
+    click.echo(f"signaled recorder pid={pid} ({'KILL' if force else 'TERM'}).")
 
 
 @main.command()
@@ -79,3 +131,11 @@ def people() -> None:
 @people.command("list")
 def people_list() -> None:
     raise click.ClickException("people list: not implemented yet (Phase 2)")
+
+
+@main.command()
+def tray() -> None:
+    """Launch the menu-bar / system-tray app."""
+    from . import tray as _tray
+
+    _tray.run()

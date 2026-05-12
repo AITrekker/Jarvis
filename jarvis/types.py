@@ -18,7 +18,7 @@ class AudioChunk:
     """Fixed-frame PCM block emitted by an AudioSource. PRD §3.1."""
 
     pcm: np.ndarray  # int16, shape (n_samples,), mono, 16 kHz
-    t_start: float   # seconds since session start
+    t_start: float  # seconds since session start
     t_end: float
 
 
