@@ -109,7 +109,10 @@ def test_record_pipeline_failure_prints_recovery_hint(
     runner = CliRunner()
     result = runner.invoke(cli.main, ["record", "--source", f"wav:{wav_path}"])
 
-    assert result.exit_code == 0
+    # Capture succeeded (WAV preserved) but pipeline failed -> exit non-zero so
+    # wrapping scripts notice. Both stdout and stderr are captured by CliRunner;
+    # ClickException writes to stderr ("Error:" prefix).
+    assert result.exit_code != 0
     assert "pipeline failed" in result.output
     assert "jarvis process" in result.output
 

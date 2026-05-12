@@ -66,16 +66,17 @@ def record(source: str, event_id: int | None) -> None:
         raise click.ClickException(str(e)) from e
 
     if result.recording_id is None:
-        click.echo(
-            f"recording finished but pipeline failed; WAV preserved at {result.audio_path}. "
-            f"re-run with `jarvis process {result.session_uuid}`",
-            err=True,
+        # Capture succeeded (WAV is on disk) but the post-stop pipeline failed.
+        # Surface this as a non-zero exit so wrapping scripts notice; the WAV
+        # is preserved per PRD §3.14 and a re-run is possible.
+        raise click.ClickException(
+            f"recording captured but pipeline failed; WAV preserved at {result.audio_path}. "
+            f"re-run with `jarvis process {result.session_uuid}`"
         )
-    else:
-        click.echo(
-            f"recorded session={result.session_uuid} "
-            f"recording_id={result.recording_id} turns={result.turns_written}"
-        )
+    click.echo(
+        f"recorded session={result.session_uuid} "
+        f"recording_id={result.recording_id} turns={result.turns_written}"
+    )
 
 
 @main.command()

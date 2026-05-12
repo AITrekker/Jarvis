@@ -66,7 +66,10 @@ packages = ["jarvis"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["docs/v1-reference"]  # frozen v1 code, kept for reference only
+extend-exclude = [
+    "docs/v1-reference",  # frozen v1 code, kept for reference only
+    ".claude",            # sub-agent worktrees (transient, retained for audit)
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "N", "SIM"]

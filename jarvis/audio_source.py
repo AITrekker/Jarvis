@@ -96,6 +96,12 @@ class WavFileSource:
     def source_label(self) -> str:
         return f"wav:{self._path.name}"
 
+    @property
+    def path(self) -> Path:
+        """Absolute path to the WAV file. Used by the Recorder to resolve
+        the session audio for the post-stop pipeline (PRD §2.1)."""
+        return self._path
+
     def __iter__(self) -> Iterator[AudioChunk]:
         if self._closed:
             raise RuntimeError("WavFileSource: iteration after close()")
