@@ -33,14 +33,24 @@ def write_pidfile(path: Path | None = None) -> Path:
 
 
 def read_pidfile(path: Path | None = None) -> int | None:
+    """Return the live recorder PID or None.
+
+    A stale pidfile (file present, process dead) is cleaned up on read so
+    PID-reuse races can't bounce a fresh `jarvis record` against a dead
+    recorder's recycled PID. Same applies to a malformed pidfile.
+    """
     path = path or default_pidfile()
     if not path.exists():
         return None
     try:
         pid = int(path.read_text().strip())
     except ValueError:
+        path.unlink(missing_ok=True)
         return None
-    return pid if _pid_alive(pid) else None
+    if _pid_alive(pid):
+        return pid
+    path.unlink(missing_ok=True)
+    return None
 
 
 def clear_pidfile(path: Path | None = None) -> None:

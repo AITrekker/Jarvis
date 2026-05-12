@@ -96,7 +96,8 @@ def persist_recording(
                 ),
             )
             row = cur.fetchone()
-            assert row is not None
+            if row is None:  # pragma: no cover - INSERT...RETURNING always yields a row
+                raise RuntimeError("INSERT into recordings did not return an id")
             recording_id = row[0]
 
         if transcript.turns:

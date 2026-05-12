@@ -93,9 +93,62 @@ def stop(force: bool) -> None:
 
 @main.command()
 @click.argument("session_uuid")
-def process(session_uuid: str) -> None:
-    """Re-run the pipeline on a stored audio file."""
-    raise click.ClickException("process: not implemented yet (Phase 1)")
+@click.option(
+    "--wav",
+    "wav_path_opt",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Override WAV location (default: ~/.../audio/<session_uuid>.wav).",
+)
+def process(session_uuid: str, wav_path_opt: Path | None) -> None:
+    """Re-run the segment+transcribe+persist pipeline on a stored WAV.
+
+    Used as the recovery path when `jarvis record` captured audio but the
+    post-stop pipeline failed (e.g. transient DB outage). Idempotent: the
+    persister updates the existing recordings row and re-inserts turns.
+    """
+    from datetime import UTC, datetime
+
+    from . import persister, segmenter, transcriber
+    from .audio_source import WavFileSource
+    from .types import SessionMeta
+
+    if wav_path_opt is not None:
+        wav_path = wav_path_opt
+    else:
+        wav_path = _paths.data_dir() / "audio" / f"{session_uuid}.wav"
+        if not wav_path.exists():
+            raise click.ClickException(
+                f"Cannot find WAV for session {session_uuid} at {wav_path}. "
+                "Pass --wav <path> if it's elsewhere."
+            )
+
+    src = WavFileSource(wav_path)
+    try:
+        segments = list(segmenter.segment(src))
+    finally:
+        src.close()
+
+    transcript = transcriber.transcribe(segments)
+
+    now = datetime.now(tz=UTC)
+    meta = SessionMeta(
+        session_uuid=session_uuid,
+        source_label=f"wav:{wav_path.name}",
+        started_at=now,
+        ended_at=now,
+    )
+    recording_id = persister.persist_recording(
+        audio_path=wav_path,
+        transcript=transcript,
+        speakers={},
+        calendar_event=None,
+        session_meta=meta,
+    )
+    click.echo(
+        f"reprocessed session={session_uuid} "
+        f"recording_id={recording_id} turns={len(transcript.turns)}"
+    )
 
 
 @main.command("search")

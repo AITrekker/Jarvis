@@ -69,10 +69,24 @@ def test_pidfile_roundtrip(tmp_path: Path) -> None:
     assert _proc.read_pidfile(pidfile) is None
 
 
-def test_pidfile_stale_pid_returns_none(tmp_path: Path) -> None:
+def test_pidfile_stale_pid_returns_none_and_cleans_up(tmp_path: Path) -> None:
+    """A stale pidfile (file present, process dead) is unlinked on read.
+
+    Critical because PIDs get recycled — without cleanup, the next live
+    process to receive that PID will be mis-identified as the recorder
+    and `jarvis record` will refuse to start with `RecorderAlreadyRunning`.
+    """
     pidfile = tmp_path / "recorder.pid"
     pidfile.write_text("999999")  # very unlikely to be a live pid
     assert _proc.read_pidfile(pidfile) is None
+    assert not pidfile.exists()
+
+
+def test_pidfile_malformed_is_cleaned_up(tmp_path: Path) -> None:
+    pidfile = tmp_path / "recorder.pid"
+    pidfile.write_text("not-a-pid")
+    assert _proc.read_pidfile(pidfile) is None
+    assert not pidfile.exists()
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="signal semantics differ on Windows")

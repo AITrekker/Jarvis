@@ -10,6 +10,7 @@ Implementations land in Phase 1.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import queue
 import threading
@@ -29,6 +30,10 @@ _TARGET_SR = 16000
 _TARGET_CHANNELS = 1
 # Sentinel pushed onto the mic queue to signal end-of-stream.
 _MIC_SENTINEL: object = object()
+# Cap the mic queue at ~60s of audio (PRD §2.1). On overflow we drop the
+# oldest chunk with a logged warning; the on-disk WAV is the source of
+# truth, so dropping in-memory chunks does not lose recording fidelity.
+_MIC_QUEUE_MAX_SECONDS = 60.0
 
 
 class AudioSource(Protocol):
@@ -161,7 +166,13 @@ class MicSource:
         self._iter_started = False
         self._t0_samples = 0  # running sample count for timestamping
 
-        self._queue: queue.Queue = queue.Queue()
+        # Bounded queue: ~60s @ 16 kHz, conservatively assuming the smallest
+        # PortAudio chunk size is 256 samples (~16ms). 60s / 16ms ≈ 3750.
+        # Drop-oldest on overflow per PRD §2.1.
+        self._queue: queue.Queue = queue.Queue(
+            maxsize=int(_MIC_QUEUE_MAX_SECONDS * _TARGET_SR / 256)
+        )
+        self._dropped_chunks = 0
         self._lock = threading.Lock()
 
         # WAV file is opened up-front so the first callback can write
@@ -174,7 +185,18 @@ class MicSource:
             subtype="PCM_16",
         )
 
-        self._stream = self._make_stream()
+        # If the input stream fails to construct (no input device, permission
+        # denied, PortAudio error), we must close the WAV we just opened —
+        # otherwise the file handle leaks until process exit.
+        try:
+            self._stream = self._make_stream()
+        except BaseException:
+            try:
+                self._wav.close()
+            finally:
+                # Remove the empty WAV so the data dir stays clean.
+                self._wav_out_path.unlink(missing_ok=True)
+            raise
 
     @property
     def source_label(self) -> str:
@@ -216,7 +238,23 @@ class MicSource:
             except Exception:  # pragma: no cover - file I/O failure mid-stream
                 log.exception("MicSource: failed to write WAV chunk")
 
-        self._queue.put(AudioChunk(pcm=mono, t_start=t_start, t_end=t_end))
+        chunk = AudioChunk(pcm=mono, t_start=t_start, t_end=t_end)
+        try:
+            self._queue.put_nowait(chunk)
+        except queue.Full:
+            # Drop oldest, push newest. The WAV-on-disk is the source of
+            # truth; we only lose live-monitoring fidelity, not recording
+            # data. Log periodically so a wedged consumer is visible.
+            with contextlib.suppress(queue.Empty):
+                self._queue.get_nowait()
+            self._dropped_chunks += 1
+            if self._dropped_chunks % 100 == 1:
+                log.warning(
+                    "MicSource queue full; dropped %d chunks (consumer is slow)",
+                    self._dropped_chunks,
+                )
+            with contextlib.suppress(queue.Full):  # pragma: no cover - extremely rare race
+                self._queue.put_nowait(chunk)
 
     # --- public API ----------------------------------------------------
 
