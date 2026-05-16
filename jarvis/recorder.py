@@ -117,12 +117,17 @@ def run(source: AudioSource, *, session_uuid: str | None = None) -> RecorderResu
             log.exception("source.close() raised in signal handler")
 
     pidfile_path = _proc.write_pidfile()
-    if sys.platform != "win32":
-        try:
-            previous_handler = signal.signal(signal.SIGTERM, _on_sigterm)
-        except ValueError:
-            # Not in main thread — skip handler, tests use this path.
-            previous_handler = None
+    # SIGTERM on Unix; SIGBREAK on Windows (sent by GenerateConsoleCtrlEvent
+    # for CTRL_BREAK_EVENT). Windows' subprocess module delivers SIGBREAK
+    # only when the child was launched with CREATE_NEW_PROCESS_GROUP — see
+    # _proc.ManagedProcess. Without this branch a Windows mic recording
+    # leaves an unfinalized WAV header.
+    stop_signal = signal.SIGBREAK if sys.platform == "win32" else signal.SIGTERM
+    try:
+        previous_handler = signal.signal(stop_signal, _on_sigterm)
+    except ValueError:
+        # Not in main thread — skip handler, tests use this path.
+        previous_handler = None
 
     recording_id: int | None = None
     turns_written = 0
@@ -185,9 +190,9 @@ def run(source: AudioSource, *, session_uuid: str | None = None) -> RecorderResu
             recording_id = None
             turns_written = 0
     finally:
-        if sys.platform != "win32" and previous_handler is not None:
+        if previous_handler is not None:
             with contextlib.suppress(ValueError):
-                signal.signal(signal.SIGTERM, previous_handler)
+                signal.signal(stop_signal, previous_handler)
         _proc.clear_pidfile(pidfile_path)
 
     return RecorderResult(

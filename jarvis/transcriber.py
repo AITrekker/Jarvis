@@ -17,6 +17,8 @@ production (config-driven).
 from __future__ import annotations
 
 import logging
+import threading
+from collections import OrderedDict
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
@@ -37,9 +39,12 @@ log = logging.getLogger(__name__)
 
 # Module-level cache, keyed by (model_name, device, compute_type). Loading
 # even ``tiny.en`` takes ~2s on a cold start; production ``large-v3`` is
-# multi-GB. Reusing the cached model across calls is essential for the
-# Phase 1 pipeline where each AudioSegment turns into one transcribe() call.
-_MODEL_CACHE: dict[tuple[str, str, str], WhisperModel] = {}
+# multi-GB so we LRU-cap to 1 entry — Phase 2 will load whisper alongside
+# pyannote, and keeping two whisper variants resident isn't worth the RAM.
+# The lock prevents two threads from racing the slow load on cache miss.
+_MODEL_CACHE_MAX = 1
+_MODEL_CACHE: OrderedDict[tuple[str, str, str], WhisperModel] = OrderedDict()
+_MODEL_CACHE_LOCK = threading.Lock()
 
 
 def _resolve_default_model() -> str:
@@ -85,33 +90,41 @@ def _resolve_device_and_compute_type() -> tuple[str, str]:
 def _load_model(model_name: str) -> WhisperModel:
     device, compute_type = _resolve_device_and_compute_type()
     key = (model_name, device, compute_type)
-    cached = _MODEL_CACHE.get(key)
-    if cached is not None:
-        return cached
 
-    # Imported lazily so importing this module is cheap (matters for the CLI
-    # cold-start path; faster-whisper pulls in ctranslate2 + tokenizers).
-    from faster_whisper import WhisperModel  # noqa: PLC0415
+    with _MODEL_CACHE_LOCK:
+        cached = _MODEL_CACHE.get(key)
+        if cached is not None:
+            _MODEL_CACHE.move_to_end(key)
+            return cached
 
-    log.info(
-        "loading whisper model %s (device=%s, compute_type=%s)", model_name, device, compute_type
-    )
-    try:
-        model = WhisperModel(
+        # Imported lazily so importing this module is cheap (matters for the
+        # CLI cold-start path; faster-whisper pulls in ctranslate2 + tokenizers).
+        from faster_whisper import WhisperModel  # noqa: PLC0415
+
+        log.info(
+            "loading whisper model %s (device=%s, compute_type=%s)",
             model_name,
-            device=device,
-            compute_type=compute_type,
-            local_files_only=True,
+            device,
+            compute_type,
         )
-    except Exception:
-        # Cache miss: fall back to allowing a download. The slow ml test
-        # explicitly relies on a pre-populated HF cache, so this branch only
-        # fires in real usage where a download is acceptable.
-        log.warning("whisper model %s not in local cache; allowing download", model_name)
-        model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        try:
+            model = WhisperModel(
+                model_name,
+                device=device,
+                compute_type=compute_type,
+                local_files_only=True,
+            )
+        except Exception:
+            # Cache miss: fall back to allowing a download. The slow ml test
+            # explicitly relies on a pre-populated HF cache, so this branch
+            # only fires in real usage where a download is acceptable.
+            log.warning("whisper model %s not in local cache; allowing download", model_name)
+            model = WhisperModel(model_name, device=device, compute_type=compute_type)
 
-    _MODEL_CACHE[key] = model
-    return model
+        _MODEL_CACHE[key] = model
+        while len(_MODEL_CACHE) > _MODEL_CACHE_MAX:
+            _MODEL_CACHE.popitem(last=False)
+        return model
 
 
 def _segment_to_float32(seg: AudioSegment) -> np.ndarray:

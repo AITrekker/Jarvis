@@ -25,11 +25,11 @@ MAX_SEGMENT_SECONDS = 30.0
 # one segment before length-capping is applied.
 _MERGE_GAP_SECONDS = 0.3
 # Silero's speech-probability threshold. The library's default (0.5) is tuned
-# for clean human speech; the Phase 1 fixture is tones-not-speech (see
-# `tests/fixtures/README.md`) and only registers above ~0.05. We use a lower
-# default so the synthetic fixture works while real speech still trips it
-# easily; real meetings produce probabilities well above 0.5 in voiced frames.
-_VAD_THRESHOLD = 0.05
+# for clean human speech; production callers should pass that. The synthetic
+# fixture is tones-not-speech (see `tests/fixtures/README.md`) and only
+# registers above ~0.05, so the test path overrides the kwarg explicitly.
+DEFAULT_VAD_THRESHOLD = 0.5
+FIXTURE_VAD_THRESHOLD = 0.05
 
 _TARGET_SR = 16000
 
@@ -48,7 +48,11 @@ def _get_vad_model():
     return _VAD_MODEL
 
 
-def segment(source: AudioSource) -> Iterator[AudioSegment]:
+def segment(
+    source: AudioSource,
+    *,
+    vad_threshold: float = DEFAULT_VAD_THRESHOLD,
+) -> Iterator[AudioSegment]:
     """Yield voiced AudioSegments from an AudioSource.
 
     Phase 1 contract:
@@ -57,6 +61,10 @@ def segment(source: AudioSource) -> Iterator[AudioSegment]:
     - Skips segments shorter than MIN_SEGMENT_SECONDS.
     - Splits at MAX_SEGMENT_SECONDS to keep Whisper happy.
     - Boundaries match ground truth within ±200ms on the test fixture.
+
+    `vad_threshold` is Silero's speech-probability cutoff. Production should
+    use the default (0.5, tuned for clean speech); tests pass
+    FIXTURE_VAD_THRESHOLD for the synthetic-tone fixture.
     """
     from silero_vad import get_speech_timestamps
 
@@ -88,7 +96,7 @@ def segment(source: AudioSource) -> Iterator[AudioSegment]:
         pcm_float,
         model,
         sampling_rate=_TARGET_SR,
-        threshold=_VAD_THRESHOLD,
+        threshold=vad_threshold,
         # speech_pad_ms=0 — Silero defaults to 30ms of pre/post padding which
         # nudges boundaries past the fixture's ±200ms tolerance. We do our own
         # gap-merge below; Whisper applies its own internal padding too, so

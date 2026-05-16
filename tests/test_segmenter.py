@@ -9,7 +9,7 @@ import numpy as np
 import soundfile as sf
 
 from jarvis.audio_source import WavFileSource
-from jarvis.segmenter import segment
+from jarvis.segmenter import FIXTURE_VAD_THRESHOLD, segment
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 FIXTURE_WAV = FIXTURES / "synthetic_5s.wav"
@@ -23,7 +23,7 @@ def _expected_regions() -> tuple[list[dict], float]:
 
 def test_segment_finds_two_voiced_regions() -> None:
     src = WavFileSource(FIXTURE_WAV)
-    segs = list(segment(src))
+    segs = list(segment(src, vad_threshold=FIXTURE_VAD_THRESHOLD))
 
     expected, tol = _expected_regions()
     assert len(segs) == len(expected), (
@@ -58,7 +58,7 @@ def test_segment_drops_too_short(tmp_path: Path) -> None:
     sf.write(str(wav_path), tone, sr, subtype="PCM_16")
 
     src = WavFileSource(wav_path)
-    segs = list(segment(src))
+    segs = list(segment(src, vad_threshold=FIXTURE_VAD_THRESHOLD))
     assert segs == []
 
 

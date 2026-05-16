@@ -60,9 +60,17 @@ def clear_pidfile(path: Path | None = None) -> None:
 
 def stop_pid(pid: int, *, force: bool = False) -> None:
     if sys.platform == "win32":
-        flag = "/F" if force else ""
-        cmd = ["taskkill", "/PID", str(pid)] + ([flag] if flag else [])
-        subprocess.run(cmd, check=False)
+        if force:
+            subprocess.run(["taskkill", "/F", "/PID", str(pid)], check=False)
+            return
+        # Graceful stop on Windows: send CTRL_BREAK_EVENT, which the recorder
+        # picks up via its SIGBREAK handler and runs the post-stop pipeline.
+        # Requires the child to have been started with CREATE_NEW_PROCESS_GROUP
+        # (see ManagedProcess). Falls back to taskkill if signaling fails.
+        try:
+            os.kill(pid, signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined]
+        except (OSError, AttributeError):
+            subprocess.run(["taskkill", "/PID", str(pid)], check=False)
     else:
         os.kill(pid, signal.SIGKILL if force else signal.SIGTERM)
 
@@ -96,13 +104,27 @@ class ManagedProcess:
         self.proc: subprocess.Popen | None = None
 
     def __enter__(self) -> ManagedProcess:
-        self.proc = subprocess.Popen(self.cmd)
+        # On Windows, put the child in its own process group so we can send
+        # CTRL_BREAK_EVENT to it for graceful shutdown. Unix doesn't need this.
+        kwargs: dict = {}
+        if sys.platform == "win32":
+            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        self.proc = subprocess.Popen(self.cmd, **kwargs)
         return self
 
     def __exit__(self, *exc) -> None:
         if self.proc is None or self.proc.poll() is not None:
             return
-        self.proc.terminate()
+        if sys.platform == "win32":
+            # Popen.terminate() on Windows is TerminateProcess (hard kill),
+            # which doesn't give the recorder a chance to flush. Send the
+            # graceful signal first; fall back to kill on timeout.
+            try:
+                self.proc.send_signal(signal.CTRL_BREAK_EVENT)
+            except (OSError, ValueError):
+                self.proc.terminate()
+        else:
+            self.proc.terminate()
         try:
             self.proc.wait(timeout=self.grace_seconds)
         except subprocess.TimeoutExpired:

@@ -54,7 +54,7 @@ def persist_recording(
         # Idempotency: if a row with this session_uuid already exists, update
         # it and wipe its children before re-inserting turns.
         cur.execute(
-            "SELECT id FROM recordings WHERE session_uuid = %s",
+            "SELECT id FROM recordings WHERE session_uuid = %s FOR UPDATE",
             (session_meta.session_uuid,),
         )
         existing = cur.fetchone()
