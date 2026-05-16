@@ -7,10 +7,12 @@ thin wrapper around a module function — no business logic here.
 from __future__ import annotations
 
 import logging
+import uuid
+from pathlib import Path
 
 import click
 
-from . import __version__, _logging
+from . import __version__, _logging, _paths, _proc
 
 
 @click.group()
@@ -35,14 +37,118 @@ def setup(fix: bool) -> None:
 @click.option("--event-id", default=None, type=int)
 def record(source: str, event_id: int | None) -> None:
     """Record audio and run the pipeline."""
-    raise click.ClickException("record: not implemented yet (Phase 1)")
+    del event_id  # Phase 2 (calendar enrichment).
+    from . import recorder
+    from .audio_source import MicSource, WavFileSource
+
+    session_uuid = str(uuid.uuid4())
+
+    if source.startswith("wav:"):
+        wav_path = Path(source[4:]).expanduser()
+        if not wav_path.exists():
+            raise click.ClickException(f"WAV file not found: {wav_path}")
+        audio_source = WavFileSource(wav_path)
+    elif source == "mic":
+        audio_dir = _paths.data_dir() / "audio"
+        audio_dir.mkdir(parents=True, exist_ok=True)
+        wav_out_path = audio_dir / f"{session_uuid}.wav"
+        audio_source = MicSource(wav_out_path=wav_out_path)
+    elif source == "system":
+        raise click.ClickException("system audio source: deferred to a later phase.")
+    else:
+        raise click.ClickException(
+            f"unknown source: {source!r}; expected 'mic', 'system', or 'wav:<path>'"
+        )
+
+    try:
+        result = recorder.run(audio_source, session_uuid=session_uuid)
+    except recorder.RecorderAlreadyRunning as e:
+        raise click.ClickException(str(e)) from e
+
+    if result.recording_id is None:
+        # Capture succeeded (WAV is on disk) but the post-stop pipeline failed.
+        # Surface this as a non-zero exit so wrapping scripts notice; the WAV
+        # is preserved per PRD §3.14 and a re-run is possible.
+        raise click.ClickException(
+            f"recording captured but pipeline failed; WAV preserved at {result.audio_path}. "
+            f"re-run with `jarvis process {result.session_uuid}`"
+        )
+    click.echo(
+        f"recorded session={result.session_uuid} "
+        f"recording_id={result.recording_id} turns={result.turns_written}"
+    )
+
+
+@main.command()
+@click.option("--force", is_flag=True, help="SIGKILL instead of SIGTERM.")
+def stop(force: bool) -> None:
+    """Signal an in-progress `jarvis record` to finalize and exit."""
+    pid = _proc.read_pidfile()
+    if pid is None:
+        click.echo("no recorder running.", err=True)
+        raise SystemExit(1)
+    _proc.stop_pid(pid, force=force)
+    click.echo(f"signaled recorder pid={pid} ({'KILL' if force else 'TERM'}).")
 
 
 @main.command()
 @click.argument("session_uuid")
-def process(session_uuid: str) -> None:
-    """Re-run the pipeline on a stored audio file."""
-    raise click.ClickException("process: not implemented yet (Phase 1)")
+@click.option(
+    "--wav",
+    "wav_path_opt",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Override WAV location (default: ~/.../audio/<session_uuid>.wav).",
+)
+def process(session_uuid: str, wav_path_opt: Path | None) -> None:
+    """Re-run the segment+transcribe+persist pipeline on a stored WAV.
+
+    Used as the recovery path when `jarvis record` captured audio but the
+    post-stop pipeline failed (e.g. transient DB outage). Idempotent: the
+    persister updates the existing recordings row and re-inserts turns.
+    """
+    from datetime import UTC, datetime
+
+    from . import persister, segmenter, transcriber
+    from .audio_source import WavFileSource
+    from .types import SessionMeta
+
+    if wav_path_opt is not None:
+        wav_path = wav_path_opt
+    else:
+        wav_path = _paths.data_dir() / "audio" / f"{session_uuid}.wav"
+        if not wav_path.exists():
+            raise click.ClickException(
+                f"Cannot find WAV for session {session_uuid} at {wav_path}. "
+                "Pass --wav <path> if it's elsewhere."
+            )
+
+    src = WavFileSource(wav_path)
+    try:
+        segments = list(segmenter.segment(src))
+    finally:
+        src.close()
+
+    transcript = transcriber.transcribe(segments)
+
+    now = datetime.now(tz=UTC)
+    meta = SessionMeta(
+        session_uuid=session_uuid,
+        source_label=f"wav:{wav_path.name}",
+        started_at=now,
+        ended_at=now,
+    )
+    recording_id = persister.persist_recording(
+        audio_path=wav_path,
+        transcript=transcript,
+        speakers={},
+        calendar_event=None,
+        session_meta=meta,
+    )
+    click.echo(
+        f"reprocessed session={session_uuid} "
+        f"recording_id={recording_id} turns={len(transcript.turns)}"
+    )
 
 
 @main.command("search")
@@ -79,3 +185,11 @@ def people() -> None:
 @people.command("list")
 def people_list() -> None:
     raise click.ClickException("people list: not implemented yet (Phase 2)")
+
+
+@main.command()
+def tray() -> None:
+    """Launch the menu-bar / system-tray app."""
+    from . import tray as _tray
+
+    _tray.run()

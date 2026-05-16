@@ -82,9 +82,20 @@ def load(path: Path | None = None) -> Config:
         sync_window_days=raw_calendar.get("sync_window_days", 14),
     )
 
+    # Selective env-var overrides for the knobs that change between
+    # interactive use and automated runs. The smoke test uses
+    # JARVIS_WHISPER_MODEL=tiny.en to avoid a multi-GB large-v3 download.
+    whisper_raw = dict(raw["whisper"])
+    if env_model := os.environ.get("JARVIS_WHISPER_MODEL"):
+        whisper_raw["model"] = env_model
+    if env_device := os.environ.get("JARVIS_WHISPER_DEVICE"):
+        whisper_raw["device"] = env_device
+    if env_compute := os.environ.get("JARVIS_WHISPER_COMPUTE_TYPE"):
+        whisper_raw["compute_type"] = env_compute
+
     return Config(
         audio=AudioConfig(**raw["audio"]),
-        whisper=WhisperConfig(**raw["whisper"]),
+        whisper=WhisperConfig(**whisper_raw),
         speaker_resolver=SpeakerResolverConfig(**raw["speaker_resolver"]),
         ollama=OllamaConfig(**raw["ollama"]),
         calendar=calendar,
