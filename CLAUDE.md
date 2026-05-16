@@ -106,8 +106,8 @@ If you're a future Claude session and one of these contradicts the PRD, the PRD 
 Run these first so you're grounded in current reality, not in this file's snapshot:
 
 ```bash
-git -C /Users/gupta.amit2/Jarvis status
-git -C /Users/gupta.amit2/Jarvis log --oneline -15
+git -C /Users/gupta.amit2/claude-sessions/Jarvis status
+git -C /Users/gupta.amit2/claude-sessions/Jarvis log --oneline -15
 uv run jarvis setup           # confirms toolchain, DB, Ollama, recording stack
 uv run nox -s test_unit       # confirms 21 unit tests still green
 ```

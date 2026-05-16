@@ -95,10 +95,10 @@ These deserve dedicated commits in Phase 2 (or sooner if they bite during the L5
 
 ### 1. Skim the diff (~5 min)
 ```bash
-git -C /Users/gupta.amit2/Jarvis log --oneline main..phase1/integration
-git -C /Users/gupta.amit2/Jarvis diff --stat main..phase1/integration
-git -C /Users/gupta.amit2/Jarvis show 62c0bf8   # the review fixes
-git -C /Users/gupta.amit2/Jarvis show 9404dd6   # the smoke fixes
+git -C /Users/gupta.amit2/claude-sessions/Jarvis log --oneline main..phase1/integration
+git -C /Users/gupta.amit2/claude-sessions/Jarvis diff --stat main..phase1/integration
+git -C /Users/gupta.amit2/claude-sessions/Jarvis show 62c0bf8   # the review fixes
+git -C /Users/gupta.amit2/claude-sessions/Jarvis show 9404dd6   # the smoke fixes
 ```
 
 ### 2. Run the L5 manual mic smoke (~5 min)
