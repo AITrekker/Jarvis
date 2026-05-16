@@ -26,6 +26,7 @@ import numpy as np
 import pytest
 
 from jarvis import transcriber
+from jarvis.transcriber import SpeakerSegment
 from jarvis.types import AudioSegment, Transcript, Turn, Word
 
 FIXTURE_WAV = Path(__file__).resolve().parent / "fixtures" / "synthetic_5s.wav"
@@ -176,6 +177,86 @@ def _read_wav_slice(path: Path, t_start: float, t_end: float) -> AudioSegment:
     start_idx = int(t_start * sr)
     end_idx = int(t_end * sr)
     return AudioSegment(pcm=pcm[start_idx:end_idx].copy(), t_start=t_start, t_end=t_end)
+
+
+# --- Phase 2: diarization overlay ---------------------------------------
+
+
+class _FakeDiarizer:
+    """In-memory DiarizationProvider for unit tests."""
+
+    def __init__(self, segments: list[SpeakerSegment]) -> None:
+        self._segments = segments
+        self.calls: list[tuple[Path, int | None]] = []
+
+    def diarize(self, audio_path: Path, *, num_speakers: int | None = None) -> list[SpeakerSegment]:
+        self.calls.append((audio_path, num_speakers))
+        return list(self._segments)
+
+
+def test_transcribe_with_diarizer_assigns_speaker_labels(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(transcriber, "_load_model", lambda name: _FakeWhisperModel())
+
+    # Whisper produces words at 10.10-10.30 ("hello") and 10.35-10.60 ("world").
+    # The first word lands in SPEAKER_01's region; the second in SPEAKER_02.
+    diarizer = _FakeDiarizer(
+        [
+            SpeakerSegment("SPEAKER_01", t_start=10.0, t_end=10.32),
+            SpeakerSegment("SPEAKER_02", t_start=10.32, t_end=11.0),
+        ]
+    )
+
+    seg = _silence_segment(t_start=10.0, t_end=11.0)
+    audio_wav = tmp_path / "fake.wav"
+    audio_wav.write_bytes(b"")  # presence is enough; the fake doesn't read it
+
+    transcript = transcriber.transcribe(
+        [seg],
+        num_speakers_hint=2,
+        model="tiny.en",
+        diarizer=diarizer,
+        audio_path=audio_wav,
+    )
+
+    assert diarizer.calls == [(audio_wav, 2)]
+    # The single segment got split on the speaker change.
+    assert len(transcript.turns) == 2
+    speakers = [t.speaker_raw for t in transcript.turns]
+    assert speakers == ["SPEAKER_01", "SPEAKER_02"]
+    assert transcript.turns[0].text == "hello"
+    assert transcript.turns[1].text == "world"
+    # Every word inherits the diarizer's labels.
+    assert all(w.speaker_raw == "SPEAKER_01" for w in transcript.turns[0].words)
+    assert all(w.speaker_raw == "SPEAKER_02" for w in transcript.turns[1].words)
+
+
+def test_transcribe_with_diarizer_requires_audio_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(transcriber, "_load_model", lambda name: _FakeWhisperModel())
+    diarizer = _FakeDiarizer([])
+    with pytest.raises(ValueError, match="audio_path"):
+        transcriber.transcribe([_silence_segment(0.0, 1.0)], model="tiny.en", diarizer=diarizer)
+
+
+def test_label_for_word_picks_max_overlap() -> None:
+    spans = [
+        SpeakerSegment("SPEAKER_00", 0.0, 1.0),
+        SpeakerSegment("SPEAKER_01", 0.9, 2.0),  # overlaps both
+    ]
+    # Word inside SPEAKER_00 only.
+    assert transcriber._label_for_word(0.0, 0.5, spans) == "SPEAKER_00"
+    # Word inside SPEAKER_01 only.
+    assert transcriber._label_for_word(1.5, 1.9, spans) == "SPEAKER_01"
+    # Word straddling the boundary, with most overlap on SPEAKER_01.
+    assert transcriber._label_for_word(0.95, 1.4, spans) == "SPEAKER_01"
+
+
+def test_label_for_word_falls_back_to_phase1_when_no_overlap() -> None:
+    spans = [SpeakerSegment("SPEAKER_00", 5.0, 6.0)]
+    assert transcriber._label_for_word(0.0, 0.5, spans) == transcriber.SPEAKER_RAW_PHASE1
 
 
 @pytest.mark.ml
