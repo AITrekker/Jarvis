@@ -113,10 +113,31 @@ class PyannoteDiarizer:
         if num_speakers is not None and num_speakers > 0:
             kwargs["min_speakers"] = num_speakers
             kwargs["max_speakers"] = num_speakers
-        annotation = pipeline(str(audio_path), **kwargs)
+
+        # Feed pyannote an in-memory waveform rather than a path. Recent
+        # pyannote (3.x) loads paths via torchcodec, which is compiled
+        # against ffmpeg 4-7 — on machines with ffmpeg 8 the torchcodec
+        # AudioDecoder import fails silently and the call later raises
+        # NameError. Passing {"waveform": tensor, "sample_rate": sr}
+        # bypasses torchcodec entirely.
+        import soundfile as sf  # noqa: PLC0415
+        import torch  # noqa: PLC0415
+
+        audio, sr = sf.read(str(audio_path), dtype="float32", always_2d=False)
+        # Pyannote wants shape (channels, samples).
+        audio = audio[None, :] if audio.ndim == 1 else audio.T
+        waveform = torch.from_numpy(audio)
+        result = pipeline({"waveform": waveform, "sample_rate": int(sr)}, **kwargs)
+
+        # pyannote 3.4+ returns a DiarizeOutput with .speaker_diarization (an
+        # Annotation) and .exclusive_speaker_diarization (overlapping regions
+        # collapsed). 3.1 returned the Annotation directly. Support both.
+        annotation = getattr(result, "exclusive_speaker_diarization", None)
+        if annotation is None:
+            annotation = getattr(result, "speaker_diarization", result)
 
         segments: list[SpeakerSegment] = []
-        # pyannote's Annotation has .itertracks(yield_label=True) -> (segment, _, label)
+        # Annotation has .itertracks(yield_label=True) -> (segment, _, label).
         for turn, _track, label in annotation.itertracks(yield_label=True):
             segments.append(
                 SpeakerSegment(

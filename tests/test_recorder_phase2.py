@@ -18,6 +18,7 @@ import pytest
 
 from jarvis import _proc, recorder, segmenter, speaker_resolver, transcriber
 from jarvis.audio_source import WavFileSource
+from jarvis.speaker_resolver import EMBEDDING_DIM
 from jarvis.transcriber import SpeakerSegment
 from jarvis.types import AudioSegment
 
@@ -125,7 +126,7 @@ def test_recorder_phase2_persists_speakers_and_event(
             (event_id, alice_id, "alice@example.com"),
         )
         # Enroll alice with a known unit-vector embedding.
-        emb = np.zeros(192, dtype=np.float32)
+        emb = np.zeros(EMBEDDING_DIM, dtype=np.float32)
         emb[0] = 1.0
         cur.execute(
             "INSERT INTO speaker_embeddings (person_id, embedding) VALUES (%s, %s::vector)",

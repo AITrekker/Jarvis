@@ -36,7 +36,12 @@ log = logging.getLogger(__name__)
 
 THRESHOLD_HIGH = 0.75
 THRESHOLD_LOW = 0.55
-EMBEDDING_DIM = 192  # pyannote ECAPA-TDNN; matches schema VECTOR(192).
+# pyannote/embedding ships a 512-dim X-vector model (PRD §3.4 originally said
+# 192-dim ECAPA-TDNN; that was an outdated reference — the current pyannote
+# release uses 512). Schema migrations 0003+ widen speaker_embeddings.embedding
+# to VECTOR(512) to match. If pyannote ships a different model in the future,
+# bump this constant and write a new migration in the same PR.
+EMBEDDING_DIM = 512
 _EMBEDDING_MODEL_NAME = "pyannote/embedding"
 
 # Single-slot cache for the embedding model.

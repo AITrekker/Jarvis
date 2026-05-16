@@ -17,6 +17,7 @@ import psycopg
 import pytest
 
 from jarvis import speaker_resolver
+from jarvis.speaker_resolver import EMBEDDING_DIM
 from jarvis.types import EnrolledSpeaker, Transcript, Turn, Word
 
 # --- Helpers -----------------------------------------------------------------
@@ -88,8 +89,10 @@ def test_slice_speaker_audio_concat() -> None:
 
 
 def test_resolve_speakers_above_high_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
-    me_emb = np.array([1.0, 0.0, 0.0] + [0.0] * 189, dtype=np.float32)
-    them_emb = np.array([0.0, 1.0, 0.0] + [0.0] * 189, dtype=np.float32)
+    me_emb = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+    me_emb[0] = 1.0
+    them_emb = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+    them_emb[1] = 1.0
 
     def fake_load() -> list[EnrolledSpeaker]:
         return [
@@ -118,7 +121,7 @@ def test_resolve_speakers_above_high_threshold(monkeypatch: pytest.MonkeyPatch) 
 def test_resolve_speakers_unenrolled_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(speaker_resolver, "load_enrolled_speakers", lambda **k: [])
     monkeypatch.setattr(
-        speaker_resolver, "_embed_audio", lambda pcm, sr: np.ones(192, dtype=np.float32)
+        speaker_resolver, "_embed_audio", lambda pcm, sr: np.ones(EMBEDDING_DIM, dtype=np.float32)
     )
 
     transcript = _make_transcript({"SPEAKER_00": [(0.0, 1.0, "hi")]})
@@ -135,9 +138,9 @@ def test_resolve_speakers_between_thresholds_needs_review(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Build candidate embedding such that cosine ≈ 0.65 against the centroid.
-    target = np.zeros(192, dtype=np.float32)
+    target = np.zeros(EMBEDDING_DIM, dtype=np.float32)
     target[0] = 1.0
-    cand = np.zeros(192, dtype=np.float32)
+    cand = np.zeros(EMBEDDING_DIM, dtype=np.float32)
     cand[0] = 0.65
     cand[1] = float(np.sqrt(1 - 0.65**2))
 
@@ -223,8 +226,10 @@ def test_load_enrolled_speakers_filters_by_person_id(postgres_url: str) -> None:
         )
         bob_id = cur.fetchone()[0]
 
-        emb_a = np.array([1.0] + [0.0] * 191, dtype=np.float32)
-        emb_b = np.array([0.0, 1.0] + [0.0] * 190, dtype=np.float32)
+        emb_a = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+        emb_a[0] = 1.0
+        emb_b = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+        emb_b[1] = 1.0
         for pid, emb in [(alice_id, emb_a), (bob_id, emb_b)]:
             cur.execute(
                 "INSERT INTO speaker_embeddings (person_id, embedding) VALUES (%s, %s::vector)",
@@ -234,7 +239,7 @@ def test_load_enrolled_speakers_filters_by_person_id(postgres_url: str) -> None:
     only_alice = speaker_resolver.load_enrolled_speakers(person_ids=[alice_id])
     assert len(only_alice) == 1
     assert only_alice[0].display_name == "alice-load"
-    assert only_alice[0].embedding.shape == (192,)
+    assert only_alice[0].embedding.shape == (EMBEDDING_DIM,)
     np.testing.assert_array_almost_equal(only_alice[0].embedding, emb_a, decimal=5)
 
     # The full set must include both new rows (and may include rows from
@@ -251,7 +256,7 @@ def test_enroll_self_idempotent(
     wav_path = tmp_path / "self.wav"
     _make_wav(wav_path, seconds=3.0)
 
-    fixed_emb = np.linspace(0.0, 1.0, 192, dtype=np.float32)
+    fixed_emb = np.linspace(0.0, 1.0, EMBEDDING_DIM, dtype=np.float32)
     monkeypatch.setattr(speaker_resolver, "_embed_audio", lambda pcm, sr: fixed_emb.copy())
 
     id1 = speaker_resolver.enroll_self(wav_path, display_name="me")
@@ -279,7 +284,7 @@ def test_enroll_self_rejects_short_wav(
     wav_path = tmp_path / "tiny.wav"
     _make_wav(wav_path, seconds=0.5)
     monkeypatch.setattr(
-        speaker_resolver, "_embed_audio", lambda pcm, sr: np.zeros(192, dtype=np.float32)
+        speaker_resolver, "_embed_audio", lambda pcm, sr: np.zeros(EMBEDDING_DIM, dtype=np.float32)
     )
     with pytest.raises(ValueError, match="shorter than 2s"):
         speaker_resolver.enroll_self(wav_path, display_name="me")
@@ -311,7 +316,7 @@ def test_enroll_from_session(
                 (rec_id, "SPEAKER_00", s, e, "hi"),
             )
 
-    fixed_emb = np.linspace(-1.0, 1.0, 192, dtype=np.float32)
+    fixed_emb = np.linspace(-1.0, 1.0, EMBEDDING_DIM, dtype=np.float32)
     monkeypatch.setattr(speaker_resolver, "_embed_audio", lambda pcm, sr: fixed_emb.copy())
 
     new_id = speaker_resolver.enroll_from_session(

@@ -49,6 +49,9 @@ logs/
 # Allow committed test fixtures only
 !tests/fixtures/**/*.wav
 !tests/fixtures/**/*.mp3
+# Re-ignore the local/ subdirectory — real meeting recordings live here
+# and shouldn't be committed (size, privacy, licensing).
+tests/fixtures/local/
 
 # Migration artifacts you don't want to commit
 *.sql.bak
