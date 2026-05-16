@@ -37,21 +37,21 @@ def fmt(session: nox.Session) -> None:
 @nox.session(name="test")
 def test_all(session: nox.Session) -> None:
     """Unit + integration tests. Integration needs Docker."""
-    session.install("-e", ".[dev,tray]")
+    session.install("-e", ".[dev,tray,audio,ml]")
     session.run("pytest")
 
 
 @nox.session(name="test_unit")
 def test_unit(session: nox.Session) -> None:
     """Fast unit tests, no Docker needed."""
-    session.install("-e", ".[dev,tray]")
+    session.install("-e", ".[dev,tray,audio,ml]")
     session.run("pytest", "-m", "not integration and not ml")
 
 
 @nox.session(name="test_integration")
 def test_integration(session: nox.Session) -> None:
     """Integration tests against a pgvector testcontainer (requires Docker)."""
-    session.install("-e", ".[dev,tray]")
+    session.install("-e", ".[dev,tray,audio,ml]")
     session.run("pytest", "-m", "integration")
 
 
