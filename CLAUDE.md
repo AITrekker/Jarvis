@@ -44,38 +44,39 @@ These are not preferences. Each maps to a v1 failure or to a 2026 architectural 
 
 ## Build phases — see PRD §7
 
-**Current state: Phase 0 complete on the owner's Mac. Ready to start Phase 1.**
+**Current state: Phase 2 complete on `main` (tag `phase2`, as of 2026-05-15). Ready to start Phase 3.**
 
-Phase 0 finished with everything green on the owner's machine via `./bootstrap.sh`:
-- toolchain (Python 3.12, uv, ffmpeg, psql) installed
-- Postgres.app running, `jarvis` DB created with pgvector + pg_trgm + 7-table schema
-- Ollama daemon running with `qwen2.5` pulled (other models like `gpt-oss` may also be present from prior installs — Jarvis only relies on what's listed in `config.toml`)
-- 21 unit tests passing
+What's done:
+- **Phase 0** (`./bootstrap.sh`): Python 3.12, uv, ffmpeg, psql, Postgres.app with pgvector+pg_trgm, Ollama daemon with `qwen2.5`. 21 unit tests.
+- **Phase 1** (tag `phase1`): WAV → `turns` rows in Postgres. `audio_source`, `segmenter`, `transcriber` (faster-whisper, single-speaker), `persister` (recordings + turns), `recorder`, `tray`, `cli`.
+- **Phase 2** (tag `phase2`): Real diarization (pyannote 3.1 + 3.4-DiarizeOutput compatibility), `speaker_resolver` (512-dim X-vector centroid + cosine + threshold gating), `enroll`/`enroll-self`/`people` CLI, `calendar_sync` (gcsa-based, OAuth in keyring), recorder integrates all three best-effort, persister writes `event_id` + `person_id` + `speaker_confidence` + `needs_review`. Verified end-to-end against pyannote's tutorial WAV — 2 speakers correctly diarized, the enrolled speaker resolved at conf 0.752.
+- 109 tests green (91 unit + 17 integration + 1 ml). Lint clean.
 
-The only intentional ✗ is `HF_TOKEN` — only required when Phase 2 wires pyannote diarization.
+`HF_TOKEN` is in `.env` (gitignored). Pyannote weights are cached at `~/.cache/huggingface/`.
 
 Do not start Phase N+1 until Phase N's gate is met.
 
-### Next: Phase 1 (per PRD §7)
+### Next: Phase 3 (per PRD §7) — search & summarization
 
-Two parallel work streams plus a minimal control surface:
-- **Agent A:** `audio_source` (WavFileSource + MicSource; SystemAudioSource deferred — see below) + `segmenter` (Silero VAD)
-- **Agent B:** `transcriber` — WhisperX wrapper, single-speaker mode (no diarization yet)
-- **Plus:** minimal `jarvis tray` icon + `jarvis stop` command, so recording is controllable without the terminal from day one
+One agent scope:
+- **`jarvis/summarizer.py`** — fire-and-forget Ollama summarization producing `Summary(abstract, action_items, topics)`. Stored on the `recordings` row (`summary_abstract`, `summary_action_items`, `summary_topics`, `summary_embedding`). Failure must not block the persister's commit.
+- **`jarvis/search.py`** — hybrid query (FTS over turn text + pgvector cosine over chunk embeddings + structured filters), RRF fusion. Direct CLI surface (`jarvis search "<query>"`); no LLM planner yet (that's Phase 5).
+- **`chunks` writes** — Phase 1/2 deliberately deferred chunk + embedding rows. Phase 3 adds them in the persister (still single transaction). PRD §8 q1 (embedding model + dim) needs to be locked **before** writing.
 
-**Gate:** WAV in → `turns` rows in Postgres with `speaker_raw="SPEAKER_00"`. Tray's *Stop recording* yields the same persisted result as `jarvis stop`.
+**Gate:** *"what did I say to <name> last week"* on seeded data returns correct results via direct hybrid search.
 
-**Recommended build order** (settled in conversation 2026-05-09):
-1. `WavFileSource` + `Segmenter` + a tiny test fixture WAV — cheapest dev loop, no mic, no Whisper
-2. `Transcriber` wrapped around #1 — first time real text appears
-3. `Persister` — schema is in place, just write
-4. `Recorder` orchestrator — owns the pidfile, glues 1–3 together
-5. `MicSource` — same protocol as Wav, real-time. Triggers the macOS mic permission prompt.
-6. `Tray` — last; nothing to control until 1–5 work. SystemAudioSource also deferred to a later phase.
+**Phase 3 prerequisites the owner must lock before agents run:**
+1. **Embedding model + dim.** Schema fixes `chunks.embedding VECTOR(768)`. Pick from PRD §8 q1: `bge-small-en` (384, doesn't fit), `nomic-embed-text` (768, fits), `all-mpnet-base-v2` (768, fits). Recommendation: `nomic-embed-text` via Ollama (already a runtime dep, no extra surface).
+2. **Query-parser failure mode** (PRD §8 q2): when Ollama is down, does `search` fall back to pure semantic or fail loudly? Default proposal: fall back, log warning.
+3. **Audio retention** (PRD §8 q3): keep WAVs forever or delete after N days? Default: keep.
 
-**Acceptance tests on owner's machine:**
-- *Pipeline*: `jarvis record --source wav:tests/fixtures/local/meeting1.wav` produces `turns` rows. Fast, repeatable. Owner has Google Meet `.mp4` recordings to convert (`ffmpeg -i in.mp4 -ac 1 -ar 16000 -vn out.wav`) and drop under `tests/fixtures/local/` (gitignored).
-- *Mic*: play a 2-min YouTube clip on a **Bluetooth speaker** (laptop speakers + laptop mic often get echo-cancelled silent), `jarvis record --source mic`, stop via tray, verify `turns` look right. Slow, manual, done once per phase.
+### Phase 1/2 carry-forwards still open (low priority)
+
+None block Phase 3. Worth doing as Phase 3 housekeeping or a Phase 2.5 cleanup pass:
+- Diarizer fallback silently downgrades; surface a `RecorderResult.diarization_skipped` flag (Phase 6 polish).
+- enroll_self requires ≥ 2s but PRD recommends 30s; add a quality warning between 2 and 30s.
+- gcsa client kwarg `save_token=False` is gcsa-version specific; wrap in try/except TypeError.
+- Pyannote `use_auth_token` vs `token` kwarg drift; if both surfaces ever disappear, switch to `huggingface_hub.login(...)` once at startup.
 
 The cross-platform helpers Phase 1 will build on are already in place: `jarvis/_proc.py` (pidfile + ManagedProcess + cross-platform stop), `jarvis/_progress.py` (TTY-aware spinner for slow Whisper imports), `jarvis/_paths.py` (per-OS data/config/runtime dirs), `jarvis/_logging.py` (handler reset + Windows UTF-8 + httpx silenced).
 
