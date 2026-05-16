@@ -167,9 +167,26 @@ def enroll(session_uuid: str, speaker_raw: str, person_name: str) -> None:
     raise click.ClickException("enroll: not implemented yet (Phase 2)")
 
 
+@main.command("enroll-self")
+@click.argument(
+    "reference_wav",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option("--name", default="me", help="Display name for the owner row.")
+def enroll_self_cmd(reference_wav: Path, name: str) -> None:
+    """Pre-enroll the owner from a reference WAV (≥ 30s recommended)."""
+    raise click.ClickException("enroll-self: not implemented yet (Phase 2)")
+
+
 @main.group()
 def calendar() -> None:
     """Calendar sync commands."""
+
+
+@calendar.command("authorize")
+def calendar_authorize() -> None:
+    """One-time OAuth flow; stores refresh token in macOS Keychain."""
+    raise click.ClickException("calendar authorize: not implemented yet (Phase 2)")
 
 
 @calendar.command("sync")

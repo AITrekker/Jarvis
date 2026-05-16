@@ -1,17 +1,28 @@
 """WhisperX wrapper. PRD §3.3.
 
 Phase 1: single-speaker mode. Every word gets speaker_raw="SPEAKER_00".
-Diarization (real speaker labels) lands in Phase 2.
+Phase 2 contract change (Agent C, locked 2026-05-15):
+- ``num_speakers_hint`` becomes load-bearing — passed through to pyannote.
+- ``speaker_raw`` per Word and Turn becomes the diarizer's actual label
+  ("SPEAKER_00", "SPEAKER_01", ...). The constant SPEAKER_RAW_PHASE1 is
+  removed.
+- Recommended path: switch the implementation to ``whisperx`` (which wraps
+  faster-whisper for transcription, adds wav2vec2 alignment for tighter
+  word timestamps, and runs pyannote diarization). The function signature
+  in §3.3 does not change; only the body and the speaker_raw values do.
+- The ``num_speakers_hint`` should propagate from the calendar attendee
+  count (calendar_sync joins event → recording, recorder reads attendees
+  and passes the count in). When unavailable, leave None and let pyannote
+  estimate.
 
-Implementation note: we use ``faster-whisper`` directly. The ``whisperx``
-package wraps faster-whisper and adds alignment + diarization, but Phase 1
-needs neither — just word-timestamped transcription with a single speaker
-label. Going through whisperx would add startup cost (extra alignment model
-load) for no benefit at this stage. Phase 2 will likely switch the
-implementation to use whisperx + pyannote when diarization comes online.
+Implementation note (Phase 1, kept for reference): we used ``faster-whisper``
+directly because Phase 1 needed no alignment or diarization. Phase 2 trades
+the extra startup cost for real speaker labels.
 
-Models load lazily and cache. Use ``tiny.en`` in tests; ``large-v3`` in
-production (config-driven).
+Models load lazily and LRU-cache (size 1) under a lock — production loads
+``large-v3`` once and Phase 2 will load it alongside pyannote, so memory
+discipline matters. Use ``tiny.en`` in tests; ``large-v3`` in production
+(config-driven).
 """
 
 from __future__ import annotations
