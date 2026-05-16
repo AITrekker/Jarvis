@@ -201,12 +201,47 @@ def calendar() -> None:
 @calendar.command("authorize")
 def calendar_authorize() -> None:
     """One-time OAuth flow; stores refresh token in macOS Keychain."""
-    raise click.ClickException("calendar authorize: not implemented yet (Phase 2)")
+    from . import calendar_sync as _cal
+
+    try:
+        _cal.authorize()
+    except RuntimeError as e:
+        raise click.ClickException(str(e)) from e
 
 
 @calendar.command("sync")
-def calendar_sync() -> None:
-    raise click.ClickException("calendar sync: not implemented yet (Phase 2)")
+@click.option(
+    "--since",
+    "since",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    default=None,
+    help="Start of sync window (YYYY-MM-DD). Default: today - sync_window_days.",
+)
+@click.option(
+    "--until",
+    "until",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    default=None,
+    help="End of sync window (YYYY-MM-DD). Default: today + sync_window_days.",
+)
+def calendar_sync_cmd(since, until) -> None:
+    """Mirror Google Calendar events into Postgres."""
+    from datetime import UTC, datetime, timedelta
+
+    from . import calendar_sync as _cal
+    from . import config as _config
+
+    cfg = _config.load()
+    window = timedelta(days=cfg.calendar.sync_window_days)
+    now = datetime.now(tz=UTC)
+    since_dt = since.replace(tzinfo=UTC) if since else now - window
+    until_dt = until.replace(tzinfo=UTC) if until else now + window
+
+    try:
+        n = _cal.sync_calendar(since_dt, until_dt)
+    except RuntimeError as e:
+        raise click.ClickException(str(e)) from e
+    click.echo(f"synced {n} events")
 
 
 @main.group()

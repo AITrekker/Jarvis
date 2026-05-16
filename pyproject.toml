@@ -38,6 +38,7 @@ ml = [
 calendar = [
     "google-api-python-client>=2.130",
     "google-auth-oauthlib>=1.2",
+    "gcsa>=2.2",
     "keyring>=25",
 ]
 tray = [
