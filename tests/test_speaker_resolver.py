@@ -209,15 +209,17 @@ def _make_wav(path: Path, seconds: float = 3.0, sr: int = 16000) -> None:
 
 @pytest.mark.integration
 def test_load_enrolled_speakers_filters_by_person_id(postgres_url: str) -> None:
+    # Use uniquely-suffixed emails — the session-scoped DB is shared with
+    # other integration tests that also seed `people` rows.
     with psycopg.connect(postgres_url) as conn, conn.cursor() as cur:
         cur.execute(
             "INSERT INTO people (display_name, email, is_self) VALUES (%s, %s, %s) RETURNING id",
-            ("alice", "alice@example.com", False),
+            ("alice-load", "alice-load@example.com", False),
         )
         alice_id = cur.fetchone()[0]
         cur.execute(
             "INSERT INTO people (display_name, email, is_self) VALUES (%s, %s, %s) RETURNING id",
-            ("bob", "bob@example.com", False),
+            ("bob-load", "bob-load@example.com", False),
         )
         bob_id = cur.fetchone()[0]
 
@@ -229,15 +231,17 @@ def test_load_enrolled_speakers_filters_by_person_id(postgres_url: str) -> None:
                 (pid, speaker_resolver._array_to_pgvector(emb)),
             )
 
-    all_enrolled = speaker_resolver.load_enrolled_speakers()
-    names = sorted(e.display_name for e in all_enrolled)
-    assert "alice" in names and "bob" in names
-
     only_alice = speaker_resolver.load_enrolled_speakers(person_ids=[alice_id])
     assert len(only_alice) == 1
-    assert only_alice[0].display_name == "alice"
+    assert only_alice[0].display_name == "alice-load"
     assert only_alice[0].embedding.shape == (192,)
     np.testing.assert_array_almost_equal(only_alice[0].embedding, emb_a, decimal=5)
+
+    # The full set must include both new rows (and may include rows from
+    # other tests that ran first against the session-scoped container).
+    all_enrolled = speaker_resolver.load_enrolled_speakers()
+    names = {e.display_name for e in all_enrolled}
+    assert {"alice-load", "bob-load"}.issubset(names)
 
 
 @pytest.mark.integration

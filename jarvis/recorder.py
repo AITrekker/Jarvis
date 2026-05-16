@@ -5,7 +5,15 @@ pidfile, audio source, segmenter, transcriber, persister. Phase 1 runs the
 pipeline post-stop (not streaming) on a session WAV that the source wrote
 to disk during capture.
 
-Implemented in Phase 1.
+Phase 2 wires in calendar enrichment and speaker resolution:
+1. Find the calendar event covering the recording window (best-effort —
+   if calendar isn't authorized, log + proceed without).
+2. Pass the attendee count as num_speakers_hint to the diarizer; pass
+   the attendee person_ids as candidate_person_ids to the resolver.
+3. Persist with both speakers and calendar_event populated.
+
+The two enrichments are independent; either can fail without preventing
+the recording from being saved (the WAV is sacrosanct, per PRD §3.14).
 """
 
 from __future__ import annotations
@@ -79,18 +87,34 @@ def _drain_source(source: AudioSource, stop_event: threading.Event) -> None:
         raise
 
 
-def run(source: AudioSource, *, session_uuid: str | None = None) -> RecorderResult:
+def run(
+    source: AudioSource,
+    *,
+    session_uuid: str | None = None,
+    diarize: bool = True,
+    enrich_calendar: bool = True,
+    resolve_speakers: bool = True,
+) -> RecorderResult:
     """Run a full recording session and return the persisted result.
 
-    Phase 1 contract:
+    Phase 1 contract (still valid with all flags off):
     - Writes pidfile on entry, clears on exit (success or failure).
     - On SIGTERM, closes the source gracefully and runs the pipeline.
     - Pipeline failure does NOT delete the WAV; re-run via `jarvis process`.
-    - Single-speaker mode: all turns get speaker_raw="SPEAKER_00".
+
+    Phase 2 contract (default):
+    - Calendar lookup runs after capture; failure is logged + ignored.
+    - Diarization runs when ``diarize`` is True; failure falls back to the
+      single-speaker mode (every turn -> SPEAKER_00).
+    - Speaker resolution runs when ``resolve_speakers`` is True and there
+      were enrolled candidates; failure falls back to empty speakers map.
+
+    Flags exist mainly so tests can drive the Phase 1 behavior without
+    monkeypatching pyannote.
     """
     # Imports are deferred so that the recorder module can be imported (and
     # the CLI registered) without forcing every dependency to load eagerly.
-    from . import persister, segmenter, transcriber
+    from . import calendar_sync, persister, segmenter, speaker_resolver, transcriber
     from .audio_source import WavFileSource
 
     session_uuid = session_uuid or str(uuid.uuid4())
@@ -156,7 +180,83 @@ def run(source: AudioSource, *, session_uuid: str | None = None) -> RecorderResu
                 except Exception:
                     log.exception("pipeline source close raised")
 
-            transcript = transcriber.transcribe(segments)
+            # Calendar enrichment — best-effort. The recording must succeed
+            # even if calendar isn't authorized.
+            calendar_event = None
+            if enrich_calendar:
+                try:
+                    calendar_event = calendar_sync.find_event_for_recording(started_at, ended_at)
+                except Exception:
+                    log.warning(
+                        "calendar lookup failed for session=%s; proceeding without",
+                        session_uuid,
+                        exc_info=True,
+                    )
+
+            num_speakers_hint = (
+                len(calendar_event.attendee_person_ids) if calendar_event is not None else None
+            )
+            candidate_person_ids = (
+                list(calendar_event.attendee_person_ids)
+                if calendar_event is not None and calendar_event.attendee_person_ids
+                else None
+            )
+
+            # Diarization — also best-effort. Falls back to single-speaker
+            # mode if pyannote can't load (no HF token, weights missing, etc).
+            diarizer = None
+            if diarize:
+                try:
+                    diarizer = transcriber.get_diarizer()
+                except Exception:
+                    log.warning(
+                        "diarizer unavailable for session=%s; falling back to single-speaker mode",
+                        session_uuid,
+                        exc_info=True,
+                    )
+
+            try:
+                transcript = transcriber.transcribe(
+                    segments,
+                    num_speakers_hint=num_speakers_hint,
+                    diarizer=diarizer,
+                    audio_path=audio_path if diarizer is not None else None,
+                )
+            except Exception:
+                if diarizer is not None:
+                    log.warning(
+                        "diarization run failed for session=%s; retrying single-speaker",
+                        session_uuid,
+                        exc_info=True,
+                    )
+                    transcript = transcriber.transcribe(segments)
+                else:
+                    raise
+
+            # Speaker resolution — only when we actually diarized AND
+            # there's at least one enrolled person to match against.
+            speakers: dict = {}
+            if resolve_speakers and diarizer is not None and transcript.turns:
+                try:
+                    import soundfile as sf  # noqa: PLC0415
+
+                    audio_full, sr_full = sf.read(audio_path, dtype="int16", always_2d=False)
+                    if audio_full.ndim > 1:
+                        audio_full = audio_full.mean(axis=1).astype("int16")
+                    speakers = speaker_resolver.resolve_speakers(
+                        transcript,
+                        audio_full,
+                        sr_full,
+                        candidate_person_ids=candidate_person_ids,
+                        session_uuid=session_uuid,
+                    )
+                except Exception:
+                    log.warning(
+                        "speaker resolution failed for session=%s; persisting raw labels only",
+                        session_uuid,
+                        exc_info=True,
+                    )
+                    speakers = {}
 
             session_meta = SessionMeta(
                 session_uuid=session_uuid,
@@ -168,8 +268,8 @@ def run(source: AudioSource, *, session_uuid: str | None = None) -> RecorderResu
             recording_id = persister.persist_recording(
                 audio_path=audio_path,
                 transcript=transcript,
-                speakers={},
-                calendar_event=None,
+                speakers=speakers,
+                calendar_event=calendar_event,
                 session_meta=session_meta,
             )
             turns_written = len(transcript.turns)
