@@ -3,9 +3,11 @@
 No dual-store writes. Embeddings live in pgvector columns on the same rows
 written in this transaction.
 
-Phase 1 scope: writes only `recordings` + `turns`. `chunks` and `embeddings`
-are Phase 3. The `speakers` and `calendar_event` arguments are accepted in
-the signature but ignored on write until Phase 2.
+Phase 1 scope: writes only `recordings` + `turns`.
+Phase 2 (2026-05-15): also writes `recordings.event_id` from
+``calendar_event`` and ``turns.person_id / speaker_confidence /
+needs_review`` from ``speakers[turn.speaker_raw]``. ``chunks`` and
+``embeddings`` are still Phase 3.
 """
 
 from __future__ import annotations
@@ -37,14 +39,17 @@ def persist_recording(
 ) -> int:
     """Persist a recording atomically. Returns the recording_id.
 
-    Phase 1 contract:
-    - Single transaction over `recordings` + `turns` only.
+    Phase 1+2 contract:
+    - Single transaction over `recordings` + `turns`.
     - Idempotent on session_meta.session_uuid: re-running deletes child rows
       and re-inserts within the same transaction.
     - On any error, the transaction rolls back; the database is unchanged.
-    - speakers/calendar_event are stored as no-ops; Phase 2 wires them in.
+    - speakers maps each Turn.speaker_raw to a ResolvedSpeaker; turns inherit
+      person_id, speaker_confidence, needs_review from that map. Empty map
+      (Phase 1 path) means every turn lands with NULLs in those columns.
+    - calendar_event, when set, populates recordings.event_id.
     """
-    del speakers, calendar_event  # Phase 2.
+    event_id = calendar_event.id if calendar_event is not None else None
 
     url = _db_url()
 
@@ -67,7 +72,8 @@ def persist_recording(
                    SET audio_path = %s,
                        source_label = %s,
                        started_at = %s,
-                       ended_at = %s
+                       ended_at = %s,
+                       event_id = %s
                  WHERE id = %s
                 """,
                 (
@@ -75,6 +81,7 @@ def persist_recording(
                     session_meta.source_label,
                     session_meta.started_at,
                     session_meta.ended_at,
+                    event_id,
                     recording_id,
                 ),
             )
@@ -83,8 +90,8 @@ def persist_recording(
             cur.execute(
                 """
                 INSERT INTO recordings
-                    (session_uuid, audio_path, source_label, started_at, ended_at)
-                VALUES (%s, %s, %s, %s, %s)
+                    (session_uuid, audio_path, source_label, started_at, ended_at, event_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
@@ -93,6 +100,7 @@ def persist_recording(
                     session_meta.source_label,
                     session_meta.started_at,
                     session_meta.ended_at,
+                    event_id,
                 ),
             )
             row = cur.fetchone()
@@ -104,13 +112,23 @@ def persist_recording(
             cur.executemany(
                 """
                 INSERT INTO turns
-                    (recording_id, speaker_raw, t_start, t_end, text)
-                VALUES (%s, %s, %s, %s, %s)
+                    (recording_id, speaker_raw, person_id, speaker_confidence,
+                     needs_review, t_start, t_end, text)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 [
                     (
                         recording_id,
                         turn.speaker_raw,
+                        speakers.get(turn.speaker_raw).person_id
+                        if turn.speaker_raw in speakers
+                        else None,
+                        speakers.get(turn.speaker_raw).confidence
+                        if turn.speaker_raw in speakers
+                        else None,
+                        speakers.get(turn.speaker_raw).needs_review
+                        if turn.speaker_raw in speakers
+                        else False,
                         float(turn.t_start),
                         float(turn.t_end),
                         turn.text,

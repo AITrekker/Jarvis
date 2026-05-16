@@ -206,6 +206,18 @@ wheels = [
 ]
 
 [[package]]
+name = "beautiful-date"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d0/cd/da33e942d76ae5294763e62fb4e6504a3bc184618f6e78ec6a0f9c8ae05e/beautiful-date-2.3.0.tar.gz", hash = "sha256:bb9db8f572298ce992a1d7542a22e2bb4959c401bfd451ab02dcbf2732054879", size = 7943, upload-time = "2023-09-15T09:23:15.72Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/74/48/5754e015612d79d36d4da499941f8e433a9ce8e96be98fab99dc5511f662/beautiful_date-2.3.0-py2.py3-none-any.whl", hash = "sha256:5d11a87ae24912d78bc0d30db21052b68011a65e1070647eb09d2e11a1f1a610", size = 8153, upload-time = "2023-09-15T09:23:14.186Z" },
+]
+
+[[package]]
 name = "certifi"
 version = "2026.4.22"
 source = { registry = "https://pypi.org/simple" }
@@ -608,6 +620,23 @@ http = [
 ]
 
 [[package]]
+name = "gcsa"
+version = "2.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "beautiful-date" },
+    { name = "google-api-python-client" },
+    { name = "google-auth-httplib2" },
+    { name = "google-auth-oauthlib" },
+    { name = "python-dateutil" },
+    { name = "tzlocal" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4f/e3/22b6a7628ad8334fd4a62bf90ac2f40cad73675c4663e718b097f15d2d55/gcsa-2.6.0.tar.gz", hash = "sha256:1181ff6bf409b165b872788827a67e7a280cbba784a7b86aef57eeca8d216e9b", size = 53239, upload-time = "2025-08-22T11:39:05.475Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7a/c4/6e1ae85ce9d707f1e441716626c0b11c578cf4af4917f969673c60442514/gcsa-2.6.0-py2.py3-none-any.whl", hash = "sha256:fcc495ffc0364d09f873e74214f6692a95fc64d7e12237cde4de68d00be9511f", size = 49634, upload-time = "2025-08-22T11:39:04.324Z" },
+]
+
+[[package]]
 name = "google-api-core"
 version = "2.30.3"
 source = { registry = "https://pypi.org/simple" }
@@ -944,6 +973,7 @@ audio = [
     { name = "soundfile" },
 ]
 calendar = [
+    { name = "gcsa" },
     { name = "google-api-python-client" },
     { name = "google-auth-oauthlib" },
     { name = "keyring" },
@@ -971,6 +1001,7 @@ tray = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.13" },
     { name = "click", specifier = ">=8.1" },
+    { name = "gcsa", marker = "extra == 'calendar'", specifier = ">=2.2" },
     { name = "google-api-python-client", marker = "extra == 'calendar'", specifier = ">=2.130" },
     { name = "google-auth-oauthlib", marker = "extra == 'calendar'", specifier = ">=1.2" },
     { name = "httpx", specifier = ">=0.27" },
@@ -3040,6 +3071,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ba/19/1b9b0e29f30c6d35cb345486df41110984ea67ae69dddbc0e8a100999493/tzdata-2026.2.tar.gz", hash = "sha256:9173fde7d80d9018e02a662e168e5a2d04f87c41ea174b139fbef642eda62d10", size = 198254, upload-time = "2026-04-24T15:22:08.651Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ce/e4/dccd7f47c4b64213ac01ef921a1337ee6e30e8c6466046018326977efd95/tzdata-2026.2-py2.py3-none-any.whl", hash = "sha256:bbe9af844f658da81a5f95019480da3a89415801f6cc966806612cc7169bffe7", size = 349321, upload-time = "2026-04-24T15:22:05.876Z" },
+]
+
+[[package]]
+name = "tzlocal"
+version = "5.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8b/2e/c14812d3d4d9cd1773c6be938f89e5735a1f11a9f184ac3639b93cef35d5/tzlocal-5.3.1.tar.gz", hash = "sha256:cceffc7edecefea1f595541dbd6e990cb1ea3d19bf01b2809f362a03dd7921fd", size = 30761, upload-time = "2025-03-05T21:17:41.549Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c2/14/e2a54fabd4f08cd7af1c07030603c3356b74da07f7cc056e600436edfa17/tzlocal-5.3.1-py3-none-any.whl", hash = "sha256:eb1a66c3ef5847adf7a834f1be0800581b683b5608e74f86ecbcef8ab91bb85d", size = 18026, upload-time = "2025-03-05T21:17:39.857Z" },
 ]
 
 [[package]]

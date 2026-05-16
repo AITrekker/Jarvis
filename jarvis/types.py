@@ -96,13 +96,13 @@ class EnrolledSpeaker:
     """One row of `speaker_embeddings` joined to `people`. PRD §3.4.
 
     The speaker_resolver loads these as candidates when scoring a session's
-    raw speakers against known voices. `embedding` is the 192-dim ECAPA-TDNN
-    centroid pyannote produces.
+    raw speakers against known voices. `embedding` is the centroid pyannote
+    produces (currently 512-dim X-vector; see speaker_resolver.EMBEDDING_DIM).
     """
 
     person_id: int
     display_name: str
-    embedding: np.ndarray  # float32, shape (192,)
+    embedding: np.ndarray  # float32, shape (EMBEDDING_DIM,)
     is_self: bool
 
 

@@ -162,9 +162,18 @@ def search_cmd(query: str) -> None:
 @click.argument("session_uuid")
 @click.argument("speaker_raw")
 @click.argument("person_name")
-def enroll(session_uuid: str, speaker_raw: str, person_name: str) -> None:
+@click.option("--email", default=None, help="Email for the new person row.")
+def enroll(session_uuid: str, speaker_raw: str, person_name: str, email: str | None) -> None:
     """Enroll a speaker's voice from an existing recording."""
-    raise click.ClickException("enroll: not implemented yet (Phase 2)")
+    from . import speaker_resolver
+
+    try:
+        new_id = speaker_resolver.enroll_from_session(
+            session_uuid, speaker_raw, person_name, person_email=email
+        )
+    except (RuntimeError, ValueError) as e:
+        raise click.ClickException(str(e)) from e
+    click.echo(f"enrolled {person_name!r} -> embedding_id={new_id}")
 
 
 @main.command("enroll-self")
@@ -175,7 +184,13 @@ def enroll(session_uuid: str, speaker_raw: str, person_name: str) -> None:
 @click.option("--name", default="me", help="Display name for the owner row.")
 def enroll_self_cmd(reference_wav: Path, name: str) -> None:
     """Pre-enroll the owner from a reference WAV (≥ 30s recommended)."""
-    raise click.ClickException("enroll-self: not implemented yet (Phase 2)")
+    from . import speaker_resolver
+
+    try:
+        new_id = speaker_resolver.enroll_self(reference_wav, display_name=name)
+    except (RuntimeError, ValueError) as e:
+        raise click.ClickException(str(e)) from e
+    click.echo(f"self-enrolled as {name!r} -> embedding_id={new_id}")
 
 
 @main.group()
@@ -186,12 +201,47 @@ def calendar() -> None:
 @calendar.command("authorize")
 def calendar_authorize() -> None:
     """One-time OAuth flow; stores refresh token in macOS Keychain."""
-    raise click.ClickException("calendar authorize: not implemented yet (Phase 2)")
+    from . import calendar_sync as _cal
+
+    try:
+        _cal.authorize()
+    except RuntimeError as e:
+        raise click.ClickException(str(e)) from e
 
 
 @calendar.command("sync")
-def calendar_sync() -> None:
-    raise click.ClickException("calendar sync: not implemented yet (Phase 2)")
+@click.option(
+    "--since",
+    "since",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    default=None,
+    help="Start of sync window (YYYY-MM-DD). Default: today - sync_window_days.",
+)
+@click.option(
+    "--until",
+    "until",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    default=None,
+    help="End of sync window (YYYY-MM-DD). Default: today + sync_window_days.",
+)
+def calendar_sync_cmd(since, until) -> None:
+    """Mirror Google Calendar events into Postgres."""
+    from datetime import UTC, datetime, timedelta
+
+    from . import calendar_sync as _cal
+    from . import config as _config
+
+    cfg = _config.load()
+    window = timedelta(days=cfg.calendar.sync_window_days)
+    now = datetime.now(tz=UTC)
+    since_dt = since.replace(tzinfo=UTC) if since else now - window
+    until_dt = until.replace(tzinfo=UTC) if until else now + window
+
+    try:
+        n = _cal.sync_calendar(since_dt, until_dt)
+    except RuntimeError as e:
+        raise click.ClickException(str(e)) from e
+    click.echo(f"synced {n} events")
 
 
 @main.group()
@@ -201,7 +251,61 @@ def people() -> None:
 
 @people.command("list")
 def people_list() -> None:
-    raise click.ClickException("people list: not implemented yet (Phase 2)")
+    """Print all rows from the people table."""
+    import psycopg
+
+    from . import speaker_resolver
+
+    url = speaker_resolver._db_url()
+    with psycopg.connect(url) as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, display_name, email, is_self "
+            "FROM people ORDER BY is_self DESC, display_name"
+        )
+        rows = cur.fetchall()
+    if not rows:
+        click.echo("(no people enrolled)")
+        return
+    click.echo(f"{'id':>4}  {'self':<5}  {'name':<24}  email")
+    click.echo("-" * 60)
+    for pid, name, email, is_self in rows:
+        click.echo(f"{pid:>4}  {'*' if is_self else ' ':<5}  {name:<24}  {email or ''}")
+
+
+@people.command("add")
+@click.argument("display_name")
+@click.option("--email", default=None, help="Email address.")
+def people_add(display_name: str, email: str | None) -> None:
+    """Add a person row (without enrolling a voice embedding)."""
+    import psycopg
+
+    from . import speaker_resolver
+
+    url = speaker_resolver._db_url()
+    with psycopg.connect(url) as conn, conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO people (display_name, email) VALUES (%s, %s) RETURNING id",
+            (display_name, email),
+        )
+        new_id = cur.fetchone()[0]
+    click.echo(f"added person id={new_id}")
+
+
+@people.command("remove")
+@click.argument("person_id", type=int)
+def people_remove(person_id: int) -> None:
+    """Delete a person row (cascades to speaker_embeddings)."""
+    import psycopg
+
+    from . import speaker_resolver
+
+    url = speaker_resolver._db_url()
+    with psycopg.connect(url) as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM people WHERE id = %s", (person_id,))
+        deleted = cur.rowcount
+    if deleted == 0:
+        raise click.ClickException(f"no person with id={person_id}")
+    click.echo(f"removed person id={person_id}")
 
 
 @main.command()
